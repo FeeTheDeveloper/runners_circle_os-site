@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  EDITOR
+  ANALYST
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum CampaignStatus {
+  DRAFT
+  PLANNED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ContentPlatform {
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  TIKTOK
+  EMAIL
+  SMS
+  WEB
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  NURTURING
+  WON
+  LOST
+}
+
+enum JobType {
+  CONTENT_PUBLISH
+  CRM_SYNC
+  LEAD_ENRICHMENT
+  REPORT_EXPORT
+  AUDIENCE_REFRESH
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AccountStatus {
+  ACTIVE
+  PAUSED
+  DISCONNECTED
+}
+
+enum IntegrationStatus {
+  PENDING
+  CONNECTED
+  DEGRADED
+  DISCONNECTED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String?
+  role         UserRole   @default(OPERATOR)
+  status       UserStatus @default(INVITED)
+  lastSeenAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  campaignsCreated Campaign[]
+
+  @@index([role, status])
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  objective   String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdById String?
+
+  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  contentItems ContentItem[]
+
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model ContentItem {
+  id           String          @id @default(cuid())
+  title        String
+  platform     ContentPlatform
+  format       String
+  copy         String
+  mediaUrl     String?
+  status       ContentStatus   @default(DRAFT)
+  scheduledFor DateTime?
+  publishedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  campaignId   String?
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([platform, status])
+  @@index([campaignId])
+  @@index([scheduledFor])
+}
+
+model AudienceSegment {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  marketLane  String?
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  leads Lead[]
+
+  @@index([name])
+  @@index([marketLane])
+}
+
+model Lead {
+  id         String     @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String     @unique
+  company    String?
+  source     String?
+  status     LeadStatus @default(NEW)
+  tags       String[]   @default([])
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  segmentId  String?
+
+  segment AudienceSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([segmentId])
+  @@index([source])
+}
+
+model AutomationJob {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(QUEUED)
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  payload      Json?
+  result       Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([type, status])
+  @@index([scheduledFor])
+}
+
+model ChannelAccount {
+  id                      String        @id @default(cuid())
+  platform                ContentPlatform
+  accountName             String
+  accountId               String
+  status                  AccountStatus @default(ACTIVE)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  integrationConnectionId String?
+
+  integrationConnection IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+
+  @@unique([platform, accountId])
+  @@index([status])
+}
+
+model IntegrationConnection {
+  id           String            @id @default(cuid())
+  provider     String
+  status       IntegrationStatus @default(PENDING)
+  metadata     Json?
+  lastSyncedAt DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  channelAccounts ChannelAccount[]
+
+  @@unique([provider])
+  @@index([status])
+}
