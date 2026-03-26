@@ -21,7 +21,7 @@ export type JobListItem = {
 
 export type JobSummary = {
   total: number;
-  pending: number;
+  queued: number;
   running: number;
   succeeded: number;
 };
@@ -29,7 +29,7 @@ export type JobSummary = {
 export async function listAutomationJobs(filters: JobFilters) {
   const result = await runReadQuery({
     query: async () => {
-      const [items, total, pending, running, succeeded] = await Promise.all([
+      const [items, total, queued, running, succeeded] = await Promise.all([
         prisma.automationJob.findMany({
           where: {
             ...(filters.status !== "ALL" ? { status: filters.status } : {}),
@@ -47,13 +47,7 @@ export async function listAutomationJobs(filters: JobFilters) {
           }
         }),
         prisma.automationJob.count(),
-        prisma.automationJob.count({
-          where: {
-            status: {
-              in: ["QUEUED", "RUNNING"]
-            }
-          }
-        }),
+        prisma.automationJob.count({ where: { status: "QUEUED" } }),
         prisma.automationJob.count({ where: { status: "RUNNING" } }),
         prisma.automationJob.count({ where: { status: "SUCCEEDED" } })
       ]);
@@ -62,7 +56,7 @@ export async function listAutomationJobs(filters: JobFilters) {
         items,
         summary: {
           total,
-          pending,
+          queued,
           running,
           succeeded
         }
@@ -72,7 +66,7 @@ export async function listAutomationJobs(filters: JobFilters) {
       items: [],
       summary: {
         total: 0,
-        pending: 0,
+        queued: 0,
         running: 0,
         succeeded: 0
       }

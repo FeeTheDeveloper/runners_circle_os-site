@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 
-import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
+import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import type { ActionState } from "@/lib/utils/action-state";
 import { getOptionalString, getRequiredString, getTagList } from "@/lib/utils/form-data";
 import {
@@ -16,8 +16,6 @@ export async function createAudienceSegment(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await assertAuthenticated();
-
   const input = {
     name: getRequiredString(formData, "name"),
     description: getOptionalString(formData, "description"),
@@ -43,8 +41,15 @@ export async function createAudienceSegment(
   }
 
   try {
+    const { userId } = await ensureSessionUserRecord();
+
     await prisma.audienceSegment.create({
-      data: parsed.data
+      data: {
+        ...parsed.data,
+        description: parsed.data.description ?? null,
+        marketLane: parsed.data.marketLane ?? null,
+        createdById: userId
+      }
     });
   } catch (error) {
     return {

@@ -4,18 +4,22 @@ import { leadStatusOptions } from "@/lib/utils/domain-options";
 
 export const leadStatusSchema = z.enum(leadStatusOptions);
 
-export const createLeadSchema = z.object({
-  firstName: z.string().min(1).max(80),
-  lastName: z.string().min(1).max(80),
-  email: z.string().email(),
-  company: z.string().max(160).optional(),
-  source: z.string().max(120).optional(),
+const leadTagSchema = z.string().trim().min(1).max(40);
+
+const leadFieldsSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  company: z.string().trim().max(160).optional(),
+  source: z.string().trim().max(120).optional(),
   status: leadStatusSchema.default("NEW"),
-  tags: z.array(z.string().min(1)).default([]),
-  notes: z.string().max(2000).optional(),
-  segmentId: z.string().optional()
+  tags: z.array(leadTagSchema).default([]).transform((tags) => Array.from(new Set(tags))),
+  notes: z.string().trim().max(2000).optional(),
+  segmentId: z.string().trim().min(1).optional()
 });
 
-export const updateLeadSchema = createLeadSchema.extend({
+export const createLeadSchema = leadFieldsSchema;
+
+export const updateLeadSchema = leadFieldsSchema.extend({
   id: z.string().min(1)
 });

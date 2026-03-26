@@ -35,15 +35,15 @@ function emptyDashboardData(): Omit<DashboardData, "source"> {
   return {
     metrics: [
       {
-        label: "Total campaigns",
+        label: "Campaigns",
         value: "0",
-        description: "Campaigns tracked in the operating system.",
+        description: "Campaign records tracked in the operating system.",
         tone: "neutral"
       },
       {
-        label: "Queued / scheduled content",
+        label: "Content items",
         value: "0",
-        description: "Content approved or scheduled for execution.",
+        description: "Content records linked to publishing and planning workflows.",
         tone: "info"
       },
       {
@@ -59,9 +59,9 @@ function emptyDashboardData(): Omit<DashboardData, "source"> {
         tone: "success"
       },
       {
-        label: "Pending jobs",
+        label: "Queued automation jobs",
         value: "0",
-        description: "Automation jobs queued or actively running.",
+        description: "Automation jobs waiting in the queue for execution.",
         tone: "neutral"
       }
     ],
@@ -76,20 +76,12 @@ export async function getDashboardData(): Promise<DashboardData> {
       const [campaignCount, contentCount, segmentCount, leadCount, pendingJobs, campaigns, jobs] =
         await Promise.all([
           prisma.campaign.count(),
-          prisma.contentItem.count({
-            where: {
-              status: {
-                in: ["APPROVED", "SCHEDULED"]
-              }
-            }
-          }),
+          prisma.contentItem.count(),
           prisma.audienceSegment.count(),
           prisma.lead.count(),
           prisma.automationJob.count({
             where: {
-              status: {
-                in: ["QUEUED", "RUNNING"]
-              }
+              status: "QUEUED"
             }
           }),
           prisma.campaign.findMany({
@@ -104,6 +96,9 @@ export async function getDashboardData(): Promise<DashboardData> {
             }
           }),
           prisma.automationJob.findMany({
+            where: {
+              status: "QUEUED"
+            },
             orderBy: [{ scheduledFor: "asc" }, { createdAt: "desc" }],
             take: 5,
             select: {
@@ -118,15 +113,15 @@ export async function getDashboardData(): Promise<DashboardData> {
       return {
         metrics: [
           {
-            label: "Total campaigns",
+            label: "Campaigns",
             value: String(campaignCount),
-            description: "Campaigns tracked in the operating system.",
+            description: "Campaign records tracked in the operating system.",
             tone: "neutral" as const
           },
           {
-            label: "Queued / scheduled content",
+            label: "Content items",
             value: String(contentCount),
-            description: "Content approved or scheduled for execution.",
+            description: "Content records linked to publishing and planning workflows.",
             tone: "info" as const
           },
           {
@@ -142,9 +137,9 @@ export async function getDashboardData(): Promise<DashboardData> {
             tone: "success" as const
           },
           {
-            label: "Pending jobs",
+            label: "Queued automation jobs",
             value: String(pendingJobs),
-            description: "Automation jobs queued or actively running.",
+            description: "Automation jobs waiting in the queue for execution.",
             tone: "neutral" as const
           }
         ],

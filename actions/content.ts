@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 
-import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
+import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import type { ActionState } from "@/lib/utils/action-state";
 import { getOptionalId, getOptionalString, getRequiredString } from "@/lib/utils/form-data";
 import { createContentItemSchema, updateContentItemSchema } from "@/lib/validators/content";
@@ -13,8 +13,6 @@ export async function createContentItem(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await assertAuthenticated();
-
   const input = {
     title: getRequiredString(formData, "title"),
     platform: getRequiredString(formData, "platform"),
@@ -44,6 +42,8 @@ export async function createContentItem(
   }
 
   try {
+    const { userId } = await ensureSessionUserRecord();
+
     await prisma.contentItem.create({
       data: {
         title: parsed.data.title,
@@ -53,7 +53,8 @@ export async function createContentItem(
         mediaUrl: parsed.data.mediaUrl || null,
         status: parsed.data.status,
         scheduledFor: parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
-        campaignId: parsed.data.campaignId ?? null
+        campaignId: parsed.data.campaignId ?? null,
+        createdById: userId
       }
     });
   } catch (error) {
@@ -64,6 +65,7 @@ export async function createContentItem(
   }
 
   revalidatePath("/content");
+  revalidatePath("/campaigns");
   revalidatePath("/dashboard");
 
   return {

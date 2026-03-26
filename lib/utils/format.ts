@@ -60,9 +60,11 @@ export function statusTone(status: string) {
       "approved",
       "published",
       "qualified",
+      "won",
       "connected",
       "configured",
       "succeeded",
+      "completed",
       "healthy"
     ].includes(normalized)
   ) {
@@ -70,14 +72,29 @@ export function statusTone(status: string) {
   }
 
   if (
-    ["paused", "scheduled", "queued", "planned", "review", "pending", "warning", "nurturing"].includes(
+    [
+      "paused",
+      "scheduled",
+      "queued",
+      "planned",
+      "review",
+      "pending",
+      "warning",
+      "nurturing",
+      "new",
+      "degraded"
+    ].includes(
       normalized
     )
   ) {
     return "warning" as const;
   }
 
-  if (["failed", "archived", "lost", "disconnected", "disabled", "error", "missing"].includes(normalized)) {
+  if (
+    ["failed", "archived", "lost", "disconnected", "disabled", "error", "missing", "cancelled"].includes(
+      normalized
+    )
+  ) {
     return "danger" as const;
   }
 

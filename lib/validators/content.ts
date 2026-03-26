@@ -7,17 +7,33 @@ export const contentPlatformSchema = z.enum(contentPlatformOptions);
 
 export const contentStatusSchema = z.enum(contentStatusOptions);
 
-export const createContentItemSchema = z.object({
-  title: z.string().min(2).max(140),
+const contentFieldsSchema = z.object({
+  title: z.string().trim().min(2).max(140),
   platform: contentPlatformSchema,
-  format: z.string().min(2).max(80),
-  copy: z.string().min(2).max(5000),
-  mediaUrl: z.string().url().optional().or(z.literal("")),
+  format: z.string().trim().min(2).max(80),
+  copy: z.string().trim().min(2).max(5000),
+  mediaUrl: z.union([z.string().trim().url(), z.literal("")]).optional(),
   status: contentStatusSchema.default("DRAFT"),
   scheduledFor: optionalDateStringSchema,
-  campaignId: z.string().optional()
+  campaignId: z.string().trim().min(1).optional()
 });
 
-export const updateContentItemSchema = createContentItemSchema.extend({
-  id: z.string().min(1)
-});
+function withContentSchedulingValidation<T extends z.ZodTypeAny>(schema: T) {
+  return schema.superRefine((value, context) => {
+    if (value.status === "SCHEDULED" && !value.scheduledFor) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Scheduled content needs a scheduled date and time.",
+        path: ["scheduledFor"]
+      });
+    }
+  });
+}
+
+export const createContentItemSchema = withContentSchedulingValidation(contentFieldsSchema);
+
+export const updateContentItemSchema = withContentSchedulingValidation(
+  contentFieldsSchema.extend({
+    id: z.string().min(1)
+  })
+);

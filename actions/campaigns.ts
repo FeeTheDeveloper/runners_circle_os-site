@@ -5,13 +5,14 @@ import { revalidatePath } from "next/cache";
 
 import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
+import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import type { ActionState } from "@/lib/utils/action-state";
 import { getOptionalString, getRequiredString } from "@/lib/utils/form-data";
 import {
   createCampaignSchema,
   deleteCampaignSchema,
   updateCampaignSchema
-} from "@/lib/validators/campaigns";
+} from "@/lib/validators/campaign";
 
 function getCampaignInput(formData: FormData) {
   return {
@@ -50,34 +51,6 @@ function normalizeCampaignMutationError(error: unknown) {
   return normalizeDatabaseError(error);
 }
 
-async function ensureCampaignActorId() {
-  const user = await assertAuthenticated();
-
-  const record = await prisma.user.upsert({
-    where: {
-      email: user.email
-    },
-    update: {
-      name: user.name,
-      role: user.role,
-      status: "ACTIVE",
-      lastSeenAt: new Date()
-    },
-    create: {
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      status: "ACTIVE",
-      lastSeenAt: new Date()
-    },
-    select: {
-      id: true
-    }
-  });
-
-  return record.id;
-}
-
 function revalidateCampaignSurfaces() {
   revalidatePath("/campaigns");
   revalidatePath("/content");
@@ -108,7 +81,7 @@ export async function createCampaign(
   }
 
   try {
-    const createdById = await ensureCampaignActorId();
+    const { userId: createdById } = await ensureSessionUserRecord();
 
     await prisma.campaign.create({
       data: {
