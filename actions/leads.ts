@@ -26,7 +26,7 @@ export async function createLead(
     email: getRequiredString(formData, "email"),
     company: getOptionalString(formData, "company"),
     source: getOptionalString(formData, "source"),
-    status: getRequiredString(formData, "status") || "NEW",
+    status: getOptionalString(formData, "status") ?? "NEW",
     tags: getTagList(formData, "tags"),
     notes: getOptionalString(formData, "notes"),
     segmentId: getOptionalId(formData, "segmentId")

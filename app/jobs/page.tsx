@@ -11,17 +11,17 @@ type JobsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function resolveOption<T extends readonly string[]>(value: string, options: T): T[number] | "ALL" {
+  return options.includes(value as T[number]) ? (value as T[number]) : "ALL";
+}
+
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = (await searchParams) ?? {};
   const status = getSearchParamValue(params.status);
   const type = getSearchParamValue(params.type);
   const filters = {
-    status: jobStatusOptions.includes(status as (typeof jobStatusOptions)[number])
-      ? (status as (typeof jobStatusOptions)[number])
-      : ("ALL" as const),
-    type: jobTypeOptions.includes(type as (typeof jobTypeOptions)[number])
-      ? (type as (typeof jobTypeOptions)[number])
-      : ("ALL" as const)
+    status: resolveOption(status, jobStatusOptions),
+    type: resolveOption(type, jobTypeOptions)
   };
   const result = await listAutomationJobs(filters);
 

@@ -19,7 +19,7 @@ export async function createContentItem(
     format: getRequiredString(formData, "format"),
     copy: getRequiredString(formData, "copy"),
     mediaUrl: getOptionalString(formData, "mediaUrl"),
-    status: getRequiredString(formData, "status") || "DRAFT",
+    status: getOptionalString(formData, "status") ?? "DRAFT",
     scheduledFor: getOptionalString(formData, "scheduledFor"),
     campaignId: getOptionalId(formData, "campaignId")
   };
@@ -50,9 +50,9 @@ export async function createContentItem(
         platform: parsed.data.platform,
         format: parsed.data.format,
         copy: parsed.data.copy,
-        mediaUrl: parsed.data.mediaUrl || null,
+        mediaUrl: parsed.data.mediaUrl ?? null,
         status: parsed.data.status,
-        scheduledFor: parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null,
+        scheduledFor: parsed.data.scheduledFor ?? null,
         campaignId: parsed.data.campaignId ?? null,
         createdById: userId
       }

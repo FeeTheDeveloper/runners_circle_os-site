@@ -19,7 +19,7 @@ function getCampaignInput(formData: FormData) {
     name: getRequiredString(formData, "name"),
     objective: getRequiredString(formData, "objective"),
     description: getOptionalString(formData, "description"),
-    status: getRequiredString(formData, "status") || "DRAFT",
+    status: getOptionalString(formData, "status") ?? "DRAFT",
     startDate: getOptionalString(formData, "startDate"),
     endDate: getOptionalString(formData, "endDate")
   };
