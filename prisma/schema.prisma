@@ -85,6 +85,11 @@ enum IntegrationStatus {
   DISCONNECTED
 }
 
+enum IntegrationProvider {
+  CRM    @map("crm")
+  SOCIAL @map("social")
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -96,7 +101,9 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  campaignsCreated Campaign[]
+  campaignsCreated        Campaign[]
+  contentItemsCreated     ContentItem[]
+  audienceSegmentsCreated AudienceSegment[]
 
   @@index([role, status])
 }
@@ -133,8 +140,10 @@ model ContentItem {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   campaignId   String?
+  createdById  String?
 
-  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([platform, status])
   @@index([campaignId])
@@ -149,8 +158,10 @@ model AudienceSegment {
   tags        String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  createdById String?
 
-  leads Lead[]
+  leads     Lead[]
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([name])
   @@index([marketLane])
@@ -211,7 +222,7 @@ model ChannelAccount {
 
 model IntegrationConnection {
   id           String            @id @default(cuid())
-  provider     String
+  provider     IntegrationProvider
   status       IntegrationStatus @default(PENDING)
   metadata     Json?
   lastSyncedAt DateTime?

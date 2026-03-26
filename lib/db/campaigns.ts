@@ -18,6 +18,8 @@ export type CampaignListItem = {
   startDate: Date | null;
   endDate: Date | null;
   createdAt: Date;
+  createdByName: string | null;
+  contentItemsCount: number;
 };
 
 export type CampaignSummary = {
@@ -55,9 +57,33 @@ export async function listCampaigns(filters: CampaignFilters) {
             status: true,
             startDate: true,
             endDate: true,
-            createdAt: true
+            createdAt: true,
+            createdBy: {
+              select: {
+                name: true,
+                email: true
+              }
+            },
+            _count: {
+              select: {
+                contentItems: true
+              }
+            }
           }
-        }),
+        }).then((campaigns) =>
+          campaigns.map((campaign) => ({
+            id: campaign.id,
+            name: campaign.name,
+            objective: campaign.objective,
+            description: campaign.description,
+            status: campaign.status,
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
+            createdAt: campaign.createdAt,
+            createdByName: campaign.createdBy?.name ?? campaign.createdBy?.email ?? null,
+            contentItemsCount: campaign._count.contentItems
+          }))
+        ),
         prisma.campaign.count(),
         prisma.campaign.count({ where: { status: "ACTIVE" } }),
         prisma.campaign.count({ where: { status: "PLANNED" } }),

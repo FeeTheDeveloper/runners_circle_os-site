@@ -1,21 +1,20 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { ZodError } from "zod";
 
 import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
 import type { ActionState } from "@/lib/utils/action-state";
 import { getOptionalString, getRequiredString } from "@/lib/utils/form-data";
-import { createCampaignSchema, updateCampaignSchema } from "@/lib/validators/campaigns";
+import {
+  createCampaignSchema,
+  deleteCampaignSchema,
+  updateCampaignSchema
+} from "@/lib/validators/campaigns";
 
-export async function createCampaign(
-  _previousState: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  await assertAuthenticated();
-
-  const input = {
+function getCampaignInput(formData: FormData) {
+  return {
     name: getRequiredString(formData, "name"),
     objective: getRequiredString(formData, "objective"),
     description: getOptionalString(formData, "description"),
@@ -23,6 +22,73 @@ export async function createCampaign(
     startDate: getOptionalString(formData, "startDate"),
     endDate: getOptionalString(formData, "endDate")
   };
+}
+
+function toCampaignWriteData(input: {
+  name: string;
+  objective: string;
+  description?: string;
+  status: "DRAFT" | "PLANNED" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+  startDate?: string;
+  endDate?: string;
+}) {
+  return {
+    name: input.name,
+    objective: input.objective,
+    description: input.description ?? null,
+    status: input.status,
+    startDate: input.startDate ? new Date(input.startDate) : null,
+    endDate: input.endDate ? new Date(input.endDate) : null
+  };
+}
+
+function normalizeCampaignMutationError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+    return "That campaign could not be found. Refresh the page and try again.";
+  }
+
+  return normalizeDatabaseError(error);
+}
+
+async function ensureCampaignActorId() {
+  const user = await assertAuthenticated();
+
+  const record = await prisma.user.upsert({
+    where: {
+      email: user.email
+    },
+    update: {
+      name: user.name,
+      role: user.role,
+      status: "ACTIVE",
+      lastSeenAt: new Date()
+    },
+    create: {
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: "ACTIVE",
+      lastSeenAt: new Date()
+    },
+    select: {
+      id: true
+    }
+  });
+
+  return record.id;
+}
+
+function revalidateCampaignSurfaces() {
+  revalidatePath("/campaigns");
+  revalidatePath("/content");
+  revalidatePath("/dashboard");
+}
+
+export async function createCampaign(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const input = getCampaignInput(formData);
 
   const parsed = createCampaignSchema.safeParse(input);
 
@@ -42,26 +108,22 @@ export async function createCampaign(
   }
 
   try {
+    const createdById = await ensureCampaignActorId();
+
     await prisma.campaign.create({
       data: {
-        name: parsed.data.name,
-        objective: parsed.data.objective,
-        description: parsed.data.description ?? null,
-        status: parsed.data.status,
-        startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
-        endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null
+        ...toCampaignWriteData(parsed.data),
+        createdById
       }
     });
   } catch (error) {
     return {
       status: "error",
-      message: normalizeDatabaseError(error)
+      message: normalizeCampaignMutationError(error)
     };
   }
 
-  revalidatePath("/campaigns");
-  revalidatePath("/content");
-  revalidatePath("/dashboard");
+  revalidateCampaignSurfaces();
 
   return {
     status: "success",
@@ -69,23 +131,95 @@ export async function createCampaign(
   };
 }
 
-export async function updateCampaign(input: unknown) {
-  try {
-    const data = updateCampaignSchema.parse(input);
+export async function updateCampaign(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await assertAuthenticated();
 
+  const parsed = updateCampaignSchema.safeParse({
+    id: getRequiredString(formData, "id"),
+    ...getCampaignInput(formData)
+  });
+
+  if (!parsed.success) {
     return {
-      ok: true,
-      message: "Campaign update placeholder validated for the next implementation phase.",
-      data
+      status: "error",
+      message: "Please review the campaign changes and try again.",
+      fieldErrors: parsed.error.flatten().fieldErrors
     };
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return {
-        ok: false,
-        message: error.message
-      };
-    }
-
-    throw error;
   }
+
+  if (!isDatabaseConfigured()) {
+    return {
+      status: "error",
+      message: "Set DATABASE_URL and run the Prisma setup commands before updating records."
+    };
+  }
+
+  try {
+    await prisma.campaign.update({
+      where: {
+        id: parsed.data.id
+      },
+      data: toCampaignWriteData(parsed.data)
+    });
+  } catch (error) {
+    return {
+      status: "error",
+      message: normalizeCampaignMutationError(error)
+    };
+  }
+
+  revalidateCampaignSurfaces();
+
+  return {
+    status: "success",
+    message: "Campaign updated successfully."
+  };
+}
+
+export async function deleteCampaign(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await assertAuthenticated();
+
+  const parsed = deleteCampaignSchema.safeParse({
+    id: getRequiredString(formData, "id")
+  });
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: "A valid campaign id is required before deletion."
+    };
+  }
+
+  if (!isDatabaseConfigured()) {
+    return {
+      status: "error",
+      message: "Set DATABASE_URL and run the Prisma setup commands before deleting records."
+    };
+  }
+
+  try {
+    await prisma.campaign.delete({
+      where: {
+        id: parsed.data.id
+      }
+    });
+  } catch (error) {
+    return {
+      status: "error",
+      message: normalizeCampaignMutationError(error)
+    };
+  }
+
+  revalidateCampaignSurfaces();
+
+  return {
+    status: "success",
+    message: "Campaign deleted successfully."
+  };
 }

@@ -81,23 +81,37 @@ Copy-Item .env.example .env
 npm.cmd run prisma:generate
 ```
 
-4. Create and apply the initial migration:
+4. Apply the committed Prisma migrations:
 
 ```bash
-npx prisma migrate dev --name init
+npm.cmd run prisma:migrate:dev
 ```
 
-5. If you prefer a schema sync during local prototyping, you can also use:
+5. When you create a new migration locally after schema changes, use:
+
+```bash
+npm.cmd run prisma:migrate:dev -- --name your-change-name
+```
+
+6. If you prefer a schema sync during local prototyping, you can also use:
 
 ```bash
 npm.cmd run prisma:push
 ```
 
-6. Start the local app:
+7. Start the local app:
 
 ```bash
 npm.cmd run dev
 ```
+
+## Vercel Deployment
+
+- `vercel.json` is configured to use `npm run deploy:vercel`, which runs `prisma generate`, applies committed migrations with `prisma migrate deploy`, and then builds Next.js.
+- Set at least `DATABASE_URL` in Vercel for both the `Production` and `Preview` environments before the first deploy.
+- Use separate PostgreSQL databases for preview and production environments so preview deployments cannot apply migrations against production data.
+- Add the rest of the secrets from `.env.example` only when you enable those integrations. `AUTH_MIDDLEWARE_ENABLED` should stay `false` until real session issuance is wired in.
+- After deploy, call `/api/health` to confirm the runtime environment and database reachability. The health response now includes `vercelEnv` and a `database` status object.
 
 ## Auth and Security Notes
 
@@ -137,6 +151,7 @@ These models are designed to support:
 - Shared UI components live under `components/ui`, while domain-specific surfaces live in `components/<domain>`.
 - Integration-specific helpers are segmented into `lib/crm`, `lib/social`, `lib/jobs`, and `lib/aws` to keep future AWS and third-party wiring isolated.
 - `lib/db/prisma.ts` and `lib/db/index.ts` provide the shared server-safe database entry point.
+- `prisma/migrations/20260326010000_init` provides the baseline schema migration used by Vercel deploys and fresh local databases.
 - `lib/db/*.ts` contains query helpers for dashboard metrics and list-page data loading.
 
 ## Next Build Phase

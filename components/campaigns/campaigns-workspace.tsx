@@ -4,23 +4,13 @@ import type { DataSource } from "@/lib/db";
 import type { CampaignFilters, CampaignListItem, CampaignSummary } from "@/lib/db/campaigns";
 
 import { CampaignCreateForm } from "@/components/campaigns/campaign-create-form";
+import { CampaignRegistry } from "@/components/campaigns/campaign-registry";
 import { buttonStyles, Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataSourceBadge } from "@/components/ui/data-source-badge";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableWrapper
-} from "@/components/ui/table";
 import { campaignStatusOptions } from "@/lib/utils/domain-options";
 import { formatDate, formatTokenLabel } from "@/lib/utils/format";
 
@@ -32,6 +22,21 @@ type CampaignsWorkspaceProps = {
 };
 
 export function CampaignsWorkspace({ filters, items, source, summary }: CampaignsWorkspaceProps) {
+  const registryItems = items.map((campaign) => ({
+    id: campaign.id,
+    name: campaign.name,
+    objective: campaign.objective,
+    description: campaign.description,
+    status: campaign.status,
+    startDateLabel: formatDate(campaign.startDate),
+    endDateLabel: formatDate(campaign.endDate),
+    createdAtLabel: formatDate(campaign.createdAt),
+    startDateValue: toDateInputValue(campaign.startDate),
+    endDateValue: toDateInputValue(campaign.endDate),
+    createdByName: campaign.createdByName,
+    contentItemsCount: campaign.contentItemsCount
+  }));
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -75,50 +80,24 @@ export function CampaignsWorkspace({ filters, items, source, summary }: Campaign
               </Link>
             </form>
 
-            {items.length > 0 ? (
-              <TableWrapper>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Campaign</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Start</TableHead>
-                      <TableHead>End</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((campaign) => (
-                      <TableRow key={campaign.id}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-white">{campaign.name}</p>
-                            <p className="max-w-lg text-sm leading-6 text-slate-400">{campaign.objective}</p>
-                            {campaign.description ? (
-                              <p className="max-w-lg text-xs leading-5 text-slate-500">{campaign.description}</p>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={campaign.status} />
-                        </TableCell>
-                        <TableCell>{formatDate(campaign.startDate)}</TableCell>
-                        <TableCell>{formatDate(campaign.endDate)}</TableCell>
-                        <TableCell>{formatDate(campaign.createdAt)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableWrapper>
-            ) : (
-              <EmptyState
-                description="No campaigns are stored yet. Create the first campaign to begin planning execution inside the operating system."
-                title="No campaigns yet"
-              />
-            )}
+            <CampaignRegistry items={registryItems} />
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+function toDateInputValue(value: Date | null) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
 }
