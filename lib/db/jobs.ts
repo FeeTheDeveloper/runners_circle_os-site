@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { JobStatus, JobType } from "@prisma/client";
+import type { AutomationJob, JobStatus, JobType, Prisma } from "@prisma/client";
 
 import { prisma, runReadQuery } from "@/lib/db";
 
@@ -24,12 +24,13 @@ export type JobSummary = {
   queued: number;
   running: number;
   succeeded: number;
+  failed: number;
 };
 
 export async function listAutomationJobs(filters: JobFilters) {
   const result = await runReadQuery({
     query: async () => {
-      const [items, total, queued, running, succeeded] = await Promise.all([
+      const [items, total, queued, running, succeeded, failed] = await Promise.all([
         prisma.automationJob.findMany({
           where: {
             ...(filters.status !== "ALL" ? { status: filters.status } : {}),
@@ -49,7 +50,8 @@ export async function listAutomationJobs(filters: JobFilters) {
         prisma.automationJob.count(),
         prisma.automationJob.count({ where: { status: "QUEUED" } }),
         prisma.automationJob.count({ where: { status: "RUNNING" } }),
-        prisma.automationJob.count({ where: { status: "SUCCEEDED" } })
+        prisma.automationJob.count({ where: { status: "SUCCEEDED" } }),
+        prisma.automationJob.count({ where: { status: "FAILED" } })
       ]);
 
       return {
@@ -58,7 +60,8 @@ export async function listAutomationJobs(filters: JobFilters) {
           total,
           queued,
           running,
-          succeeded
+          succeeded,
+          failed
         }
       };
     },
@@ -68,10 +71,66 @@ export async function listAutomationJobs(filters: JobFilters) {
         total: 0,
         queued: 0,
         running: 0,
-        succeeded: 0
+        succeeded: 0,
+        failed: 0
       }
     })
   });
 
   return result;
+}
+
+export async function getQueuedJobs(now = new Date()): Promise<AutomationJob[]> {
+  return prisma.automationJob.findMany({
+    where: {
+      status: "QUEUED",
+      scheduledFor: {
+        lte: now
+      }
+    },
+    orderBy: [{ scheduledFor: "asc" }, { createdAt: "asc" }]
+  });
+}
+
+export async function markJobRunning(id: string): Promise<AutomationJob> {
+  return prisma.automationJob.update({
+    where: {
+      id
+    },
+    data: {
+      status: "RUNNING",
+      startedAt: new Date(),
+      completedAt: null
+    }
+  });
+}
+
+export async function markJobComplete(id: string, result: Prisma.InputJsonValue): Promise<AutomationJob> {
+  return prisma.automationJob.update({
+    where: {
+      id
+    },
+    data: {
+      status: "SUCCEEDED",
+      completedAt: new Date(),
+      result
+    }
+  });
+}
+
+export async function markJobFailed(id: string, error: unknown): Promise<AutomationJob> {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return prisma.automationJob.update({
+    where: {
+      id
+    },
+    data: {
+      status: "FAILED",
+      completedAt: new Date(),
+      result: {
+        error: message
+      }
+    }
+  });
 }

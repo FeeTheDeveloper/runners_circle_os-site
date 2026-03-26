@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
 import { ensureSessionUserRecord } from "@/lib/db/user-actors";
+import { createContentPublishJob } from "@/lib/jobs/create-job";
 import type { ActionState } from "@/lib/utils/action-state";
 import { getOptionalId, getOptionalString, getRequiredString } from "@/lib/utils/form-data";
 import { createContentItemSchema, updateContentItemSchema } from "@/lib/validators/content";
@@ -43,18 +44,26 @@ export async function createContentItem(
 
   try {
     const { userId } = await ensureSessionUserRecord();
+    const shouldCreatePublishJob =
+      parsed.data.status === "SCHEDULED" || parsed.data.status === "APPROVED";
 
-    await prisma.contentItem.create({
-      data: {
-        title: parsed.data.title,
-        platform: parsed.data.platform,
-        format: parsed.data.format,
-        copy: parsed.data.copy,
-        mediaUrl: parsed.data.mediaUrl ?? null,
-        status: parsed.data.status,
-        scheduledFor: parsed.data.scheduledFor ?? null,
-        campaignId: parsed.data.campaignId ?? null,
-        createdById: userId
+    await prisma.$transaction(async (tx) => {
+      const contentItem = await tx.contentItem.create({
+        data: {
+          title: parsed.data.title,
+          platform: parsed.data.platform,
+          format: parsed.data.format,
+          copy: parsed.data.copy,
+          mediaUrl: parsed.data.mediaUrl ?? null,
+          status: parsed.data.status,
+          scheduledFor: parsed.data.scheduledFor ?? null,
+          campaignId: parsed.data.campaignId ?? null,
+          createdById: userId
+        }
+      });
+
+      if (shouldCreatePublishJob) {
+        await createContentPublishJob(contentItem.id, tx);
       }
     });
   } catch (error) {
@@ -67,6 +76,7 @@ export async function createContentItem(
   revalidatePath("/content");
   revalidatePath("/campaigns");
   revalidatePath("/dashboard");
+  revalidatePath("/jobs");
 
   return {
     status: "success",

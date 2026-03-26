@@ -7,6 +7,7 @@ import { buttonStyles, Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataSourceBadge } from "@/components/ui/data-source-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { RunDispatcherButton } from "@/components/jobs/run-dispatcher-button";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -34,11 +35,6 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          description="Automation jobs currently stored in the execution ledger."
-          label="Total"
-          value={String(summary.total)}
-        />
-        <StatCard
           description="Jobs queued and waiting for worker pickup."
           label="Queued"
           tone="warning"
@@ -56,6 +52,12 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
           tone="success"
           value={String(summary.succeeded)}
         />
+        <StatCard
+          description="Jobs that reached a terminal failure state and need operator review."
+          label="Failed"
+          tone="danger"
+          value={String(summary.failed)}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
@@ -68,7 +70,10 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                   Queue-oriented job monitoring for scheduled publishing, CRM sync, reporting, and audience refresh work.
                 </CardDescription>
               </div>
-              <DataSourceBadge source={source} />
+              <div className="flex flex-wrap items-center gap-3">
+                <DataSourceBadge source={source} />
+                <RunDispatcherButton />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
