@@ -107,8 +107,9 @@ npm.cmd run dev
 
 ## Vercel Deployment
 
-- `vercel.json` is configured to use `npm run deploy:vercel`, which runs `prisma generate`, applies committed migrations with `prisma migrate deploy`, and then builds Next.js.
-- Set at least `DATABASE_URL` in Vercel for both the `Production` and `Preview` environments before the first deploy.
+- `vercel.json` is configured to use `npm run deploy:vercel`, which runs a deployment script that always generates Prisma Client, applies committed migrations when `DATABASE_URL` is present, and then builds Next.js.
+- If `DATABASE_URL` is not set, the deploy still succeeds and the app falls back to degraded database-unavailable mode.
+- Set `DATABASE_URL` in Vercel for both the `Production` and `Preview` environments when you are ready to use the live database and automatic migrations.
 - Use separate PostgreSQL databases for preview and production environments so preview deployments cannot apply migrations against production data.
 - Add the rest of the secrets from `.env.example` only when you enable those integrations. `AUTH_MIDDLEWARE_ENABLED` should stay `false` until real session issuance is wired in.
 - After deploy, call `/api/health` to confirm the runtime environment and database reachability. The health response now includes `vercelEnv` and a `database` status object.
