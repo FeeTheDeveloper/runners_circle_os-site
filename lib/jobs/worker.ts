@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { AutomationJob, Prisma } from "@prisma/client";
 
 import { markJobComplete, markJobFailed } from "@/lib/db/jobs";
@@ -56,6 +54,13 @@ async function processCRMSyncJob(job: AutomationJob) {
 }
 
 export async function processJob(job: AutomationJob) {
+  if (job.status !== "RUNNING") {
+    return {
+      ok: false,
+      error: `Automation job ${job.id} must be RUNNING before worker execution.`
+    };
+  }
+
   try {
     let result: Prisma.InputJsonValue;
 
@@ -79,7 +84,8 @@ export async function processJob(job: AutomationJob) {
     await markJobFailed(job.id, error);
 
     return {
-      ok: false
+      ok: false,
+      error: error instanceof Error ? error.message : "Job processing failed."
     };
   }
 }

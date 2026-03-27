@@ -151,15 +151,15 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
           <CardHeader>
             <CardTitle>Execution engine status</CardTitle>
             <CardDescription>
-              Persistence and queue monitoring are live. Distributed job execution is the next operational milestone.
+              Persistence and queue handoff are live. Distributed worker execution is the next operational milestone.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4">
               <p className="text-sm font-semibold text-white">Next AWS phase</p>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Wire EventBridge for scheduling, SQS for queue handoff, and Lambda workers for execution so queued
-                records can move from ledger state into real background processing.
+                Wire EventBridge for scheduling and Lambda workers for execution so dispatched jobs can move from SQS
+                handoff into durable background processing.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4">
@@ -167,7 +167,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-400">
                 <li>Prisma-backed automation jobs are queryable from the App Router UI.</li>
                 <li>Status tracking is ready for queued, running, succeeded, failed, and cancelled work.</li>
-                <li>No worker plane is dispatching jobs yet, so this page remains an operational control surface.</li>
+                <li>Dispatcher-triggered SQS handoff is wired, and local worker processing is available for development.</li>
               </ul>
             </div>
           </CardContent>

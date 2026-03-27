@@ -1,8 +1,7 @@
-import "server-only";
+import { Prisma, type AutomationJob, type JobStatus, type JobType } from "@prisma/client";
 
-import type { AutomationJob, JobStatus, JobType, Prisma } from "@prisma/client";
-
-import { prisma, runReadQuery } from "@/lib/db";
+import { prisma } from "@/lib/db/prisma";
+import { runReadQuery } from "@/lib/db/runtime";
 
 export type JobFilters = {
   status: JobStatus | "ALL";
@@ -92,17 +91,58 @@ export async function getQueuedJobs(now = new Date()): Promise<AutomationJob[]> 
   });
 }
 
-export async function markJobRunning(id: string): Promise<AutomationJob> {
-  return prisma.automationJob.update({
+export async function getRunningJobs(): Promise<AutomationJob[]> {
+  return prisma.automationJob.findMany({
+    where: {
+      status: "RUNNING"
+    },
+    orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }]
+  });
+}
+
+export async function getAutomationJobById(id: string): Promise<AutomationJob | null> {
+  return prisma.automationJob.findUnique({
     where: {
       id
+    }
+  });
+}
+
+async function getExistingJobOrThrow(id: string): Promise<AutomationJob> {
+  const job = await prisma.automationJob.findUnique({
+    where: {
+      id
+    }
+  });
+
+  if (!job) {
+    throw new Error(`Automation job ${id} could not be found.`);
+  }
+
+  return job;
+}
+
+export async function markJobRunning(id: string): Promise<AutomationJob> {
+  const transition = await prisma.automationJob.updateMany({
+    where: {
+      id,
+      status: "QUEUED"
     },
     data: {
       status: "RUNNING",
       startedAt: new Date(),
-      completedAt: null
+      completedAt: null,
+      result: Prisma.DbNull
     }
   });
+
+  if (transition.count === 0) {
+    const job = await getExistingJobOrThrow(id);
+
+    throw new Error(`Automation job ${id} is ${job.status} and cannot transition to RUNNING.`);
+  }
+
+  return getExistingJobOrThrow(id);
 }
 
 export async function markJobComplete(id: string, result: Prisma.InputJsonValue): Promise<AutomationJob> {
