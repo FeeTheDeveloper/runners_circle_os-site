@@ -1,61 +1,22 @@
 import "server-only";
 
 import type { AutomationJob } from "@prisma/client";
-import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
+import { SendMessageCommand } from "@aws-sdk/client-sqs";
 
-export type QueueDispatchResult = {
-  success: true;
-  messageId?: string;
-} | {
-  success: false;
-  error: string;
-};
+import { getSqsClient, getSqsQueueConfig } from "@/lib/aws/sqs";
 
-type QueueConfig = {
-  accessKeyId: string;
-  queueUrl: string;
-  region: string;
-  secretAccessKey: string;
-};
-
-const globalForSqs = globalThis as typeof globalThis & {
-  sqsClient?: SQSClient;
-};
-
-function getQueueConfig(): QueueConfig | null {
-  const region = process.env.AWS_REGION?.trim() ?? "";
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim() ?? "";
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim() ?? "";
-  const queueUrl = process.env.AWS_SQS_QUEUE_URL?.trim() ?? "";
-
-  if (!region || !accessKeyId || !secretAccessKey || !queueUrl) {
-    return null;
-  }
-
-  return {
-    accessKeyId,
-    queueUrl,
-    region,
-    secretAccessKey
-  };
-}
-
-function getSqsClient(config: QueueConfig) {
-  if (!globalForSqs.sqsClient) {
-    globalForSqs.sqsClient = new SQSClient({
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey
-      },
-      region: config.region
-    });
-  }
-
-  return globalForSqs.sqsClient;
-}
+export type QueueDispatchResult =
+  | {
+      success: true;
+      messageId?: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
 export async function sendToQueue(job: AutomationJob): Promise<QueueDispatchResult> {
-  const config = getQueueConfig();
+  const config = getSqsQueueConfig();
 
   if (!config) {
     return {

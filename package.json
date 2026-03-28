@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "deploy:vercel": "node scripts/vercel-build.mjs",
     "postinstall": "prisma generate",
+    "sqs:worker": "tsx scripts/sqs-worker.ts",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "worker:run": "tsx scripts/run-worker.ts",
