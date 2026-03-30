@@ -16,6 +16,13 @@ const WAIT_TIME_SECONDS = 10;
 
 let keepRunning = true;
 
+type QueueMessageBody = {
+  jobId: string;
+  type: string;
+  payload: unknown;
+  scheduledFor: string | null;
+};
+
 function delay(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -50,41 +57,92 @@ function registerShutdownHandlers() {
   process.on("SIGTERM", handleShutdown);
 }
 
-function extractJobId(body: string | undefined) {
+function parseMessageBody(
+  body: string | undefined
+):
+  | {
+      ok: true;
+      value: QueueMessageBody;
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   if (!body) {
-    return null;
+    return {
+      ok: false,
+      error: "Message body is empty."
+    };
   }
 
   try {
-    const parsed = JSON.parse(body) as { jobId?: unknown };
+    const parsed = JSON.parse(body) as Record<string, unknown>;
 
-    if (typeof parsed?.jobId !== "string" || parsed.jobId.length === 0) {
-      return null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        ok: false,
+        error: "Message body must be a JSON object."
+      };
     }
 
-    return parsed.jobId;
+    const { jobId, type, payload, scheduledFor } = parsed;
+
+    if (typeof jobId !== "string" || jobId.length === 0) {
+      return {
+        ok: false,
+        error: "Message body must include a non-empty jobId string."
+      };
+    }
+
+    if (typeof type !== "string" || type.length === 0) {
+      return {
+        ok: false,
+        error: "Message body must include a non-empty type string."
+      };
+    }
+
+    if (!Object.hasOwn(parsed, "payload")) {
+      return {
+        ok: false,
+        error: "Message body must include a payload field."
+      };
+    }
+
+    if (scheduledFor !== null && typeof scheduledFor !== "string") {
+      return {
+        ok: false,
+        error: "Message body scheduledFor must be a string or null."
+      };
+    }
+
+    return {
+      ok: true,
+      value: {
+        jobId,
+        type,
+        payload,
+        scheduledFor
+      }
+    };
   } catch {
-    return null;
+    return {
+      ok: false,
+      error: "Message body is not valid JSON."
+    };
   }
 }
 
-async function deleteMessage(queueUrl: string, message: Message) {
+async function deleteMessage(
+  client: ReturnType<typeof getSqsClient>,
+  queueUrl: string,
+  message: Message
+) {
   if (!message.ReceiptHandle) {
     logError("Skipping delete because the SQS message has no receipt handle.", {
       messageId: message.MessageId ?? "unknown"
     });
     return;
   }
-
-  const config = getSqsQueueConfig();
-
-  if (!config) {
-    throw new Error(
-      "AWS SQS is not configured. Set AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SQS_QUEUE_URL."
-    );
-  }
-
-  const client = getSqsClient(config);
 
   await client.send(
     new DeleteMessageCommand({
@@ -94,29 +152,45 @@ async function deleteMessage(queueUrl: string, message: Message) {
   );
 }
 
-async function handleMessage(queueUrl: string, message: Message) {
+async function handleMessage(
+  client: ReturnType<typeof getSqsClient>,
+  queueUrl: string,
+  message: Message
+) {
   const messageId = message.MessageId ?? "unknown";
-  const jobId = extractJobId(message.Body);
+  const parsedBody = parseMessageBody(message.Body);
 
-  if (!jobId) {
+  if (!parsedBody.ok) {
     logError("Received malformed SQS message. Deleting it from the queue.", {
       messageId,
+      error: parsedBody.error,
       body: message.Body ?? null
     });
-    await deleteMessage(queueUrl, message);
+    await deleteMessage(client, queueUrl, message);
     return;
   }
 
+  const { jobId, scheduledFor, type } = parsedBody.value;
   const job = await getAutomationJobById(jobId);
 
   if (!job) {
     log("Received SQS message for a missing job. Deleting it from the queue.", {
       messageId,
-      jobId
+      jobId,
+      type,
+      scheduledFor
     });
-    await deleteMessage(queueUrl, message);
+    await deleteMessage(client, queueUrl, message);
     return;
   }
+
+  log("Processing automation job from SQS.", {
+    messageId,
+    jobId,
+    type,
+    scheduledFor,
+    status: job.status
+  });
 
   const result = await processJob(job);
 
@@ -124,29 +198,21 @@ async function handleMessage(queueUrl: string, message: Message) {
     logError("Job processing failed. Leaving the SQS message in the queue for retry.", {
       messageId,
       jobId,
+      type,
       error: result.error ?? "Unknown processing error"
     });
     return;
   }
 
-  await deleteMessage(queueUrl, message);
+  await deleteMessage(client, queueUrl, message);
   log("Processed automation job and deleted the SQS message.", {
     messageId,
-    jobId
+    jobId,
+    type
   });
 }
 
-async function pollOnce(queueUrl: string) {
-  const config = getSqsQueueConfig();
-
-  if (!config) {
-    throw new Error(
-      "AWS SQS is not configured. Set AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SQS_QUEUE_URL."
-    );
-  }
-
-  const client = getSqsClient(config);
-
+async function pollOnce(client: ReturnType<typeof getSqsClient>, queueUrl: string) {
   log("Polling SQS for automation jobs.", {
     waitTimeSeconds: WAIT_TIME_SECONDS,
     maxMessages: MAX_MESSAGES_PER_CYCLE
@@ -173,7 +239,7 @@ async function pollOnce(queueUrl: string) {
 
   for (const message of messages) {
     try {
-      await handleMessage(queueUrl, message);
+      await handleMessage(client, queueUrl, message);
     } catch (error) {
       logError("Unhandled error while processing an SQS message.", {
         messageId: message.MessageId ?? "unknown",
@@ -202,6 +268,8 @@ async function main() {
 
   registerShutdownHandlers();
 
+  const client = getSqsClient(config);
+
   try {
     await prisma.$connect();
   } catch (error) {
@@ -222,7 +290,7 @@ async function main() {
   try {
     while (keepRunning) {
       try {
-        await pollOnce(config.queueUrl);
+        await pollOnce(client, config.queueUrl);
       } catch (error) {
         logError("Poll cycle failed.", {
           error: error instanceof Error ? error.message : "Unknown poll failure"
