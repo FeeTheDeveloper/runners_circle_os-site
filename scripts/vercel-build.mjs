@@ -20,13 +20,13 @@ function run(command, args) {
   }
 }
 
-run(npmCommand, ["run", "prisma:generate"]);
-
 if (process.env.DATABASE_URL) {
-  console.log("DATABASE_URL detected. Applying Prisma migrations before build.");
-  run(npmCommand, ["run", "prisma:migrate:deploy"]);
+  console.log("DATABASE_URL detected. Syncing Prisma schema before build.");
+  run(npmCommand, ["run", "prisma:push"]);
+  run(npmCommand, ["run", "prisma:generate"]);
 } else {
-  console.log("DATABASE_URL is not set. Skipping Prisma migrations for this deployment.");
+  console.log("DATABASE_URL is not set. Skipping Prisma schema sync for this deployment.");
+  run(npmCommand, ["run", "prisma:generate"]);
 }
 
 run(npmCommand, ["run", "build"]);
