@@ -107,11 +107,12 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Queue key</TableHead>
+                      <TableHead>Job</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Content</TableHead>
+                      <TableHead>Campaign</TableHead>
                       <TableHead>Scheduled</TableHead>
-                      <TableHead>Started</TableHead>
-                      <TableHead>Completed</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -126,9 +127,23 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                         <TableCell>
                           <StatusBadge status={job.status} />
                         </TableCell>
+                        <TableCell>{formatDateTime(job.createdAt)}</TableCell>
+                        <TableCell>
+                          {job.contentTitle ? (
+                            <div className="space-y-1">
+                              <p className="text-sm text-slate-100">{job.contentTitle}</p>
+                              {job.contentItemId ? (
+                                <p className="font-mono text-xs text-slate-500">{job.contentItemId}</p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "Not attached"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {job.campaignName ?? (job.campaignId ? "Attached campaign" : "Unassigned")}
+                        </TableCell>
                         <TableCell>{formatDateTime(job.scheduledFor)}</TableCell>
-                        <TableCell>{job.startedAt ? formatDateTime(job.startedAt) : "Not started"}</TableCell>
-                        <TableCell>{job.completedAt ? formatDateTime(job.completedAt) : "Not completed"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

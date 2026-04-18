@@ -1,6 +1,7 @@
 import type { AutomationJob, Prisma } from "@prisma/client";
 
 import { markJobComplete, markJobFailed } from "@/lib/db/jobs";
+import { getContentPublishJobPayload } from "@/lib/jobs/payload";
 import { prisma } from "@/lib/db/prisma";
 
 function getPayloadValue(payload: Prisma.JsonValue | null, key: string) {
@@ -12,7 +13,8 @@ function getPayloadValue(payload: Prisma.JsonValue | null, key: string) {
 }
 
 async function processContentPublishJob(job: AutomationJob) {
-  const contentItemId = getPayloadValue(job.payload, "contentItemId");
+  const payload = getContentPublishJobPayload(job.payload);
+  const contentItemId = payload?.contentItemId ?? getPayloadValue(job.payload, "contentItemId");
 
   if (typeof contentItemId !== "string" || contentItemId.length === 0) {
     throw new Error("CONTENT_PUBLISH jobs require a contentItemId payload.");

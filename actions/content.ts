@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 
+import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
 import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import { createContentPublishJob } from "@/lib/jobs/create-job";
@@ -42,10 +43,10 @@ export async function createContentItem(
     };
   }
 
+  const authenticatedUser = await assertAuthenticated();
+
   try {
     const { userId } = await ensureSessionUserRecord();
-    const shouldCreatePublishJob =
-      parsed.data.status === "SCHEDULED" || parsed.data.status === "APPROVED";
 
     await prisma.$transaction(async (tx) => {
       const contentItem = await tx.contentItem.create({
@@ -62,9 +63,14 @@ export async function createContentItem(
         }
       });
 
-      if (shouldCreatePublishJob) {
-        await createContentPublishJob(contentItem.id, tx);
-      }
+      await createContentPublishJob(
+        {
+          contentItemId: contentItem.id,
+          createdById: userId,
+          supabaseUserId: authenticatedUser.id
+        },
+        tx
+      );
     });
   } catch (error) {
     return {
@@ -80,7 +86,7 @@ export async function createContentItem(
 
   return {
     status: "success",
-    message: "Content item created successfully."
+    message: "Content item created and automation job queued successfully."
   };
 }
 

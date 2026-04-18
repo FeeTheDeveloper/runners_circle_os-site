@@ -1,5 +1,6 @@
 import { Prisma, type AutomationJob, type JobStatus, type JobType } from "@prisma/client";
 
+import { getContentPublishJobPayload } from "@/lib/jobs/payload";
 import { prisma } from "@/lib/db/prisma";
 import { runReadQuery } from "@/lib/db/runtime";
 
@@ -16,6 +17,10 @@ export type JobListItem = {
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
+  contentItemId: string | null;
+  contentTitle: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
 };
 
 export type JobSummary = {
@@ -43,9 +48,28 @@ export async function listAutomationJobs(filters: JobFilters) {
             scheduledFor: true,
             startedAt: true,
             completedAt: true,
-            createdAt: true
+            createdAt: true,
+            payload: true
           }
-        }),
+        }).then((jobs) =>
+          jobs.map((job) => {
+            const contentPublishPayload = getContentPublishJobPayload(job.payload);
+
+            return {
+              id: job.id,
+              type: job.type,
+              status: job.status,
+              scheduledFor: job.scheduledFor,
+              startedAt: job.startedAt,
+              completedAt: job.completedAt,
+              createdAt: job.createdAt,
+              contentItemId: contentPublishPayload?.contentItemId ?? null,
+              contentTitle: contentPublishPayload?.contentTitle ?? null,
+              campaignId: contentPublishPayload?.campaignId ?? null,
+              campaignName: contentPublishPayload?.campaignName ?? null
+            };
+          })
+        ),
         prisma.automationJob.count(),
         prisma.automationJob.count({ where: { status: "QUEUED" } }),
         prisma.automationJob.count({ where: { status: "RUNNING" } }),
