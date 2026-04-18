@@ -56,6 +56,12 @@ enum LeadStatus {
   LOST
 }
 
+enum PublicSubmissionType {
+  CONSULTATION
+  INTAKE
+  ONBOARDING
+}
+
 enum JobType {
   CONTENT_PUBLISH
   CRM_SYNC
@@ -168,24 +174,46 @@ model AudienceSegment {
 }
 
 model Lead {
-  id         String     @id @default(cuid())
-  firstName  String
-  lastName   String
-  email      String     @unique
-  company    String?
-  source     String?
-  status     LeadStatus @default(NEW)
-  tags       String[]   @default([])
-  notes      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  segmentId  String?
+  id                String             @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String             @unique
+  company           String?
+  source            String?
+  status            LeadStatus         @default(NEW)
+  tags              String[]           @default([])
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  segmentId         String?
+  publicSubmissions PublicSubmission[]
 
   segment AudienceSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([segmentId])
   @@index([source])
+}
+
+model PublicSubmission {
+  id          String               @id @default(cuid())
+  type        PublicSubmissionType
+  source      String
+  email       String
+  name        String?
+  company     String?
+  payload     Json
+  summary     Json?
+  requestMeta Json?
+  createdAt   DateTime             @default(now())
+  leadId      String?
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([source])
+  @@index([email])
+  @@index([leadId])
 }
 
 model AutomationJob {
