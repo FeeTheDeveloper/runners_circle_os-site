@@ -98,7 +98,7 @@ export function statusTone(status: string) {
     return "danger" as const;
   }
 
-  if (["running"].includes(normalized)) {
+  if (["running", "processing"].includes(normalized)) {
     return "info" as const;
   }
 

@@ -1,6 +1,8 @@
 import { Prisma, type AutomationJob, type JobStatus, type JobType } from "@prisma/client";
 
+import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
 import { getContentPublishJobPayload } from "@/lib/jobs/payload";
+import { getJobResultDetails } from "@/lib/jobs/result";
 import { prisma } from "@/lib/db/prisma";
 import { runReadQuery } from "@/lib/db/runtime";
 
@@ -21,6 +23,8 @@ export type JobListItem = {
   contentTitle: string | null;
   campaignId: string | null;
   campaignName: string | null;
+  resultSummary: string | null;
+  errorMessage: string | null;
 };
 
 export type JobSummary = {
@@ -49,11 +53,13 @@ export async function listAutomationJobs(filters: JobFilters) {
             startedAt: true,
             completedAt: true,
             createdAt: true,
-            payload: true
+            payload: true,
+            result: true
           }
         }).then((jobs) =>
           jobs.map((job) => {
             const contentPublishPayload = getContentPublishJobPayload(job.payload);
+            const resultDetails = getJobResultDetails(job.result);
 
             return {
               id: job.id,
@@ -66,7 +72,9 @@ export async function listAutomationJobs(filters: JobFilters) {
               contentItemId: contentPublishPayload?.contentItemId ?? null,
               contentTitle: contentPublishPayload?.contentTitle ?? null,
               campaignId: contentPublishPayload?.campaignId ?? null,
-              campaignName: contentPublishPayload?.campaignName ?? null
+              campaignName: contentPublishPayload?.campaignName ?? null,
+              resultSummary: resultDetails.summary,
+              errorMessage: resultDetails.error
             };
           })
         ),
@@ -106,7 +114,7 @@ export async function listAutomationJobs(filters: JobFilters) {
 export async function getQueuedJobs(now = new Date()): Promise<AutomationJob[]> {
   return prisma.automationJob.findMany({
     where: {
-      status: "QUEUED",
+      status: JOB_STATUS_TO_DB[JOB_STATUS.QUEUED],
       scheduledFor: {
         lte: now
       }
@@ -118,7 +126,7 @@ export async function getQueuedJobs(now = new Date()): Promise<AutomationJob[]> 
 export async function getRunningJobs(): Promise<AutomationJob[]> {
   return prisma.automationJob.findMany({
     where: {
-      status: "RUNNING"
+      status: JOB_STATUS_TO_DB[JOB_STATUS.PROCESSING]
     },
     orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }]
   });
@@ -147,13 +155,22 @@ async function getExistingJobOrThrow(id: string): Promise<AutomationJob> {
 }
 
 export async function markJobRunning(id: string): Promise<AutomationJob> {
+  return markJobProcessing(id, ["QUEUED"]);
+}
+
+export async function markJobProcessing(
+  id: string,
+  allowedStatuses: JobStatus[] = ["QUEUED", "FAILED"]
+): Promise<AutomationJob> {
   const transition = await prisma.automationJob.updateMany({
     where: {
       id,
-      status: "QUEUED"
+      status: {
+        in: allowedStatuses
+      }
     },
     data: {
-      status: "RUNNING",
+      status: JOB_STATUS_TO_DB[JOB_STATUS.PROCESSING],
       startedAt: new Date(),
       completedAt: null,
       result: Prisma.DbNull
@@ -163,7 +180,7 @@ export async function markJobRunning(id: string): Promise<AutomationJob> {
   if (transition.count === 0) {
     const job = await getExistingJobOrThrow(id);
 
-    throw new Error(`Automation job ${id} is ${job.status} and cannot transition to RUNNING.`);
+    throw new Error(`Automation job ${id} is ${job.status} and cannot transition to PROCESSING.`);
   }
 
   return getExistingJobOrThrow(id);
@@ -175,7 +192,7 @@ export async function markJobComplete(id: string, result: Prisma.InputJsonValue)
       id
     },
     data: {
-      status: "SUCCEEDED",
+      status: JOB_STATUS_TO_DB[JOB_STATUS.COMPLETED],
       completedAt: new Date(),
       result
     }
@@ -184,17 +201,30 @@ export async function markJobComplete(id: string, result: Prisma.InputJsonValue)
 
 export async function markJobFailed(id: string, error: unknown): Promise<AutomationJob> {
   const message = error instanceof Error ? error.message : String(error);
+  const result =
+    error && typeof error === "object" && !Array.isArray(error)
+      ? {
+          success: false,
+          processedAt: new Date().toISOString(),
+          ...error,
+          error: "error" in error && typeof error.error === "string" ? error.error : message,
+          summary: "summary" in error && typeof error.summary === "string" ? error.summary : message
+        }
+      : {
+          success: false,
+          processedAt: new Date().toISOString(),
+          error: message,
+          summary: message
+        };
 
   return prisma.automationJob.update({
     where: {
       id
     },
     data: {
-      status: "FAILED",
+      status: JOB_STATUS_TO_DB[JOB_STATUS.FAILED],
       completedAt: new Date(),
-      result: {
-        error: message
-      }
+      result
     }
   });
 }

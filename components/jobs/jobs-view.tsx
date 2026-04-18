@@ -7,7 +7,7 @@ import { buttonStyles, Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataSourceBadge } from "@/components/ui/data-source-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { RunDispatcherButton } from "@/components/jobs/run-dispatcher-button";
+import { JobExecutionForm } from "@/components/jobs/job-execution-form";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -20,6 +20,7 @@ import {
   TableRow,
   TableWrapper
 } from "@/components/ui/table";
+import { getJobDisplayStatus, isJobRunnable } from "@/lib/jobs/constants";
 import { jobStatusOptions, jobTypeOptions } from "@/lib/utils/domain-options";
 import { formatDateTime, formatTokenLabel } from "@/lib/utils/format";
 
@@ -42,13 +43,13 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
         />
         <StatCard
           description="Jobs currently executing against sync or publishing workloads."
-          label="Running"
+          label="Processing"
           tone="info"
           value={String(summary.running)}
         />
         <StatCard
           description="Successfully completed work units."
-          label="Succeeded"
+          label="Completed"
           tone="success"
           value={String(summary.succeeded)}
         />
@@ -67,13 +68,10 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
               <div>
                 <CardTitle>Execution ledger</CardTitle>
                 <CardDescription>
-                  Queue-oriented job monitoring for scheduled publishing, CRM sync, reporting, and audience refresh work.
+                  Internal execution tracking for content publish jobs with safe lifecycle controls and retry support.
                 </CardDescription>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <DataSourceBadge source={source} />
-                <RunDispatcherButton />
-              </div>
+              <DataSourceBadge source={source} />
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -90,7 +88,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                 <option value="ALL">All statuses</option>
                 {jobStatusOptions.map((status) => (
                   <option key={status} value={status}>
-                    {formatTokenLabel(status)}
+                    {formatTokenLabel(getJobDisplayStatus(status))}
                   </option>
                 ))}
               </Select>
@@ -113,6 +111,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                       <TableHead>Content</TableHead>
                       <TableHead>Campaign</TableHead>
                       <TableHead>Scheduled</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -122,10 +121,14 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                           <div className="space-y-1">
                             <p className="font-medium text-white">{formatTokenLabel(job.type)}</p>
                             <p className="font-mono text-xs text-slate-500">{job.id}</p>
+                            {job.resultSummary ? <p className="text-xs text-slate-400">{job.resultSummary}</p> : null}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <StatusBadge status={job.status} />
+                          <div className="space-y-1">
+                            <StatusBadge status={getJobDisplayStatus(job.status)} />
+                            {job.errorMessage ? <p className="text-xs text-rose-300">{job.errorMessage}</p> : null}
+                          </div>
                         </TableCell>
                         <TableCell>{formatDateTime(job.createdAt)}</TableCell>
                         <TableCell>
@@ -144,6 +147,22 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                           {job.campaignName ?? (job.campaignId ? "Attached campaign" : "Unassigned")}
                         </TableCell>
                         <TableCell>{formatDateTime(job.scheduledFor)}</TableCell>
+                        <TableCell>
+                          {isJobRunnable(job.status) ? (
+                            <JobExecutionForm
+                              jobId={job.id}
+                              mode={job.status === "FAILED" ? "retry" : "run"}
+                            />
+                          ) : (
+                            <span className="text-sm text-slate-500">
+                              {job.status === "RUNNING"
+                                ? "Processing"
+                                : job.status === "SUCCEEDED"
+                                  ? "Completed"
+                                  : "No action"}
+                            </span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -166,23 +185,23 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
           <CardHeader>
             <CardTitle>Execution engine status</CardTitle>
             <CardDescription>
-              Persistence and queue handoff are live. Distributed worker execution is the next operational milestone.
+              Execution is now fully internal for the first lifecycle pass, with manual controls for safe validation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4">
-              <p className="text-sm font-semibold text-white">Next AWS phase</p>
+              <p className="text-sm font-semibold text-white">Current execution scope</p>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Wire EventBridge for scheduling and Lambda workers for execution so dispatched jobs can move from SQS
-                handoff into durable background processing.
+                Content publish jobs can now move from queued to processing to completed or failed entirely inside the
+                app, without touching external publishing services.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4">
               <p className="text-sm font-semibold text-slate-100">Current posture</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-400">
-                <li>Prisma-backed automation jobs are queryable from the App Router UI.</li>
-                <li>Status tracking is ready for queued, running, succeeded, failed, and cancelled work.</li>
-                <li>Dispatcher-triggered SQS handoff is wired, and local worker processing is available for development.</li>
+                <li>Queued content publish jobs can be run manually from the App Router jobs surface.</li>
+                <li>Failed jobs retain error details on the record and can be retried from the same table.</li>
+                <li>Job completion stores a structured internal result without publishing to third-party channels.</li>
               </ul>
             </div>
           </CardContent>
