@@ -4,9 +4,10 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { useFormStatus } from "react-dom";
 
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 
-type SubmitButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type SubmitButtonProps = Omit<ButtonProps, "type"> &
+  ButtonHTMLAttributes<HTMLButtonElement> & {
   pendingLabel?: string;
 };
 

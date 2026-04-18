@@ -22,6 +22,7 @@ Runners Circle Marketing OS is a production-minded internal operations app built
 - `/jobs`
 - `/settings`
 - `/sign-in`
+- `/sign-up`
 - `/api/health`
 - `/api/webhooks/crm`
 
@@ -29,7 +30,7 @@ Runners Circle Marketing OS is a production-minded internal operations app built
 
 ```text
 app/
-  (auth)/sign-in/
+  (auth)/actions.ts
   api/
   audiences/
   campaigns/
@@ -38,8 +39,11 @@ app/
   jobs/
   leads/
   settings/
+  sign-in/
+  sign-up/
 actions/
 components/
+  auth/
   audiences/
   campaigns/
   content/
@@ -111,15 +115,17 @@ npm.cmd run dev
 - If `DATABASE_URL` is not set, the deploy still succeeds and the app falls back to degraded database-unavailable mode.
 - Set `DATABASE_URL` in Vercel for both the `Production` and `Preview` environments when you are ready to use the live database and automatic migrations.
 - Use separate PostgreSQL databases for preview and production environments so preview deployments cannot apply migrations against production data.
-- Add the rest of the secrets from `.env.example` only when you enable those integrations. `AUTH_MIDDLEWARE_ENABLED` should stay `false` until real session issuance is wired in.
+- Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from your Supabase project before testing the protected dashboard.
+- Add the rest of the secrets from `.env.example` only when you enable those integrations.
 - After deploy, call `/api/health` to confirm the runtime environment and database reachability. The health response now includes `vercelEnv` and a `database` status object.
 
 ## Auth and Security Notes
 
-- `middleware.ts` is prepared for auth gating and redirects unauthenticated traffic to `/sign-in` when `AUTH_MIDDLEWARE_ENABLED=true`.
-- The default scaffold keeps `AUTH_MIDDLEWARE_ENABLED=false` so the shell can be reviewed before real session issuance is connected.
+- Supabase Auth is wired with App Router-safe SSR clients under `lib/supabase`.
+- `middleware.ts` refreshes the Supabase session cookie and redirects unauthenticated users to `/sign-in`.
+- `/sign-in`, `/sign-up`, `/api/health`, `/api/public/*`, and `/api/webhooks/*` remain publicly reachable.
 - Internal mutations live in `actions/*.ts` and write through Prisma with zod validation and route revalidation.
-- Auth is intentionally not implemented yet, but the structure is ready for session-aware ownership and gating.
+- Authenticated writes now persist local user ownership for campaigns, content, audiences, and leads.
 
 ## Prisma Domain Coverage
 
@@ -157,7 +163,7 @@ These models are designed to support:
 
 ## Next Build Phase
 
-- Add real auth and session ownership to writes and reads
+- Add per-user read filtering and Row Level Security strategy for multi-tenant isolation
 - Add update and delete flows for each core domain object
 - Wire CRM and social provider clients
 - Add AWS EventBridge/SQS job execution for automation records

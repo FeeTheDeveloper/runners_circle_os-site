@@ -110,6 +110,7 @@ model User {
   campaignsCreated        Campaign[]
   contentItemsCreated     ContentItem[]
   audienceSegmentsCreated AudienceSegment[]
+  leadsCreated            Lead[]
 
   @@index([role, status])
 }
@@ -186,13 +187,16 @@ model Lead {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   segmentId         String?
+  createdById       String?
   publicSubmissions PublicSubmission[]
 
-  segment AudienceSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  segment   AudienceSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  createdBy User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([segmentId])
   @@index([source])
+  @@index([createdById])
 }
 
 model PublicSubmission {

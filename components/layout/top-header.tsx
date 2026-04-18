@@ -2,6 +2,9 @@
 
 import { usePathname } from "next/navigation";
 
+import type { SessionUser } from "@/lib/auth/session";
+
+import { SignOutForm } from "@/components/auth/sign-out-form";
 import { Badge } from "@/components/ui/badge";
 
 const sectionLabels: Record<string, string> = {
@@ -12,10 +15,15 @@ const sectionLabels: Record<string, string> = {
   "/leads": "Lead operations",
   "/jobs": "Automation monitor",
   "/settings": "System settings",
-  "/sign-in": "Access control"
+  "/sign-in": "Access control",
+  "/sign-up": "Access control"
 };
 
-export function TopHeader() {
+type TopHeaderProps = {
+  user: SessionUser | null;
+};
+
+export function TopHeader({ user }: TopHeaderProps) {
   const pathname = usePathname();
   const currentSection = sectionLabels[pathname] ?? "Internal workspace";
 
@@ -35,7 +43,14 @@ export function TopHeader() {
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="success">Postgres Ready</Badge>
           <Badge variant="info">Server Actions</Badge>
-          <Badge variant="warning">Auth Pending</Badge>
+          <Badge variant="success">Supabase Auth</Badge>
+          {user ? (
+            <>
+              <Badge variant="neutral">{user.role}</Badge>
+              <span className="text-sm text-slate-300">{user.name ?? user.email}</span>
+              <SignOutForm />
+            </>
+          ) : null}
         </div>
       </div>
     </header>

@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 
-import { assertAuthenticated } from "@/lib/auth/session";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
+import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import type { ActionState } from "@/lib/utils/action-state";
 import {
   getOptionalId,
@@ -18,8 +18,6 @@ export async function createLead(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await assertAuthenticated();
-
   const input = {
     firstName: getRequiredString(formData, "firstName"),
     lastName: getRequiredString(formData, "lastName"),
@@ -50,13 +48,16 @@ export async function createLead(
   }
 
   try {
+    const { userId } = await ensureSessionUserRecord();
+
     await prisma.lead.create({
       data: {
         ...parsed.data,
         company: parsed.data.company ?? null,
         source: parsed.data.source ?? null,
         notes: parsed.data.notes ?? null,
-        segmentId: parsed.data.segmentId ?? null
+        segmentId: parsed.data.segmentId ?? null,
+        createdById: userId
       }
     });
   } catch (error) {

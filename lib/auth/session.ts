@@ -1,41 +1,59 @@
-import { cookies } from "next/headers";
+import "server-only";
 
-import { AUTH_MIDDLEWARE_ENABLED, AUTH_SESSION_COOKIE } from "@/lib/auth/config";
+import type { User } from "@supabase/supabase-js";
+
+import { createClient } from "@/lib/supabase/server";
 
 export type SessionUser = {
   id: string;
-  name: string;
+  name: string | null;
   email: string;
-  role: "ADMIN" | "OPERATOR";
+  role: "ADMIN" | "OPERATOR" | "EDITOR" | "ANALYST";
 };
 
-const previewUser: SessionUser = {
-  id: "preview-operator",
-  name: "Marketing Ops",
-  email: "ops@runnerscircle.local",
-  role: "ADMIN"
-};
+function resolveUserRole(user: User): SessionUser["role"] {
+  const candidate = user.app_metadata?.role ?? user.user_metadata?.role;
 
-export async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
-
-  if (!AUTH_MIDDLEWARE_ENABLED && !sessionToken) {
-    return previewUser;
+  if (candidate === "ADMIN" || candidate === "OPERATOR" || candidate === "EDITOR" || candidate === "ANALYST") {
+    return candidate;
   }
 
-  if (!sessionToken) {
-    return null;
-  }
+  return "OPERATOR";
+}
 
+function mapSupabaseUser(user: User): SessionUser {
   return {
-    ...previewUser,
-    id: sessionToken
+    id: user.id,
+    name:
+      typeof user.user_metadata?.full_name === "string"
+        ? user.user_metadata.full_name
+        : typeof user.user_metadata?.name === "string"
+          ? user.user_metadata.name
+          : null,
+    email: user.email ?? "",
+    role: resolveUserRole(user)
   };
 }
 
+export async function getUser() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) {
+    return null;
+  }
+
+  return mapSupabaseUser(user);
+}
+
+export async function getCurrentUser() {
+  return getUser();
+}
+
 export async function assertAuthenticated() {
-  const user = await getCurrentUser();
+  const user = await getUser();
 
   if (!user) {
     throw new Error("Authentication required");

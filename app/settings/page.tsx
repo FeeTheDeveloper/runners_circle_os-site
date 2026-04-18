@@ -2,14 +2,22 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
-import { AUTH_MIDDLEWARE_ENABLED } from "@/lib/auth/config";
 import { getAwsRuntimeConfig } from "@/lib/aws/config";
+
+const supabaseConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+);
 
 const envHealth = [
   {
     label: "Database",
     status: process.env.DATABASE_URL ? "Configured" : "Missing",
     detail: "PostgreSQL connection string for Prisma runtime and migrations."
+  },
+  {
+    label: "Supabase Auth",
+    status: supabaseConfigured ? "Configured" : "Missing",
+    detail: "URL and publishable key used for SSR-safe auth clients and protected routes."
   },
   {
     label: "CRM",
@@ -58,21 +66,22 @@ export default function SettingsPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Auth middleware</CardTitle>
+              <CardTitle>Auth protection</CardTitle>
               <CardDescription>
-                Middleware is structured for future session gating without blocking shell review during setup.
+                Middleware now refreshes Supabase sessions and blocks private routes until a valid user is present.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-slate-300">Current state</span>
-                <Badge variant={AUTH_MIDDLEWARE_ENABLED ? "success" : "warning"}>
-                  {AUTH_MIDDLEWARE_ENABLED ? "Enabled" : "Preview mode"}
+                <Badge variant={supabaseConfigured ? "success" : "warning"}>
+                  {supabaseConfigured ? "Protected" : "Awaiting config"}
                 </Badge>
               </div>
               <p className="text-sm leading-6 text-slate-400">
-                Turn on <code className="font-mono text-slate-200">AUTH_MIDDLEWARE_ENABLED=true</code> after session
-                issuance and sign-in handling are connected.
+                Set <code className="font-mono text-slate-200">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+                <code className="font-mono text-slate-200">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> to enable the
+                full sign-in, session refresh, and logout flow.
               </p>
             </CardContent>
           </Card>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { getUser } from "@/lib/auth/session";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,10 +19,12 @@ type RootLayoutProps = {
   children: ReactNode;
 };
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({ children }: RootLayoutProps) {
+  const user = await getUser();
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body data-authenticated={user ? "true" : "false"}>{children}</body>
     </html>
   );
 }

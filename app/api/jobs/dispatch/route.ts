@@ -1,7 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { AUTH_MIDDLEWARE_ENABLED } from "@/lib/auth/config";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isDatabaseConfigured } from "@/lib/db";
 import { dispatchQueuedJobs } from "@/lib/jobs/dispatcher";
@@ -21,13 +20,6 @@ function errorResponse(status: number, error: string) {
 }
 
 export async function POST() {
-  if (!AUTH_MIDDLEWARE_ENABLED) {
-    return errorResponse(
-      503,
-      "Job dispatch requires authenticated sessions. Enable AUTH_MIDDLEWARE_ENABLED first."
-    );
-  }
-
   const user = await getCurrentUser();
 
   if (!user) {
