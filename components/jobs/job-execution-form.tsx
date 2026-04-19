@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { runAutomationJob } from "@/actions/jobs";
+import { retryAutomationJob, runAutomationJob } from "@/actions/jobs";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { initialActionState } from "@/lib/utils/action-state";
 
@@ -12,7 +12,8 @@ type JobExecutionFormProps = {
 };
 
 export function JobExecutionForm({ jobId, mode }: JobExecutionFormProps) {
-  const [state, formAction] = useActionState(runAutomationJob, initialActionState);
+  const action = mode === "retry" ? retryAutomationJob : runAutomationJob;
+  const [state, formAction] = useActionState(action, initialActionState);
 
   return (
     <form action={formAction} className="space-y-2">

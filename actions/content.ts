@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { ZodError } from "zod";
 
 import { assertAuthenticated } from "@/lib/auth/session";
+import { enqueueJobMessage } from "@/lib/aws/queue";
 import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
 import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import { createContentPublishJob } from "@/lib/jobs/create-job";
@@ -44,11 +45,12 @@ export async function createContentItem(
   }
 
   const authenticatedUser = await assertAuthenticated();
+  let automationJobId: string | null = null;
 
   try {
     const { userId } = await ensureSessionUserRecord();
 
-    await prisma.$transaction(async (tx) => {
+    const createdJob = await prisma.$transaction(async (tx) => {
       const contentItem = await tx.contentItem.create({
         data: {
           title: parsed.data.title,
@@ -63,7 +65,7 @@ export async function createContentItem(
         }
       });
 
-      await createContentPublishJob(
+      return createContentPublishJob(
         {
           contentItemId: contentItem.id,
           createdById: userId,
@@ -72,11 +74,28 @@ export async function createContentItem(
         tx
       );
     });
+
+    automationJobId = createdJob.id;
   } catch (error) {
     return {
       status: "error",
       message: normalizeDatabaseError(error)
     };
+  }
+
+  let queueMessage = "Content item created and automation job queued successfully.";
+
+  if (automationJobId) {
+    const queueResult = await enqueueJobMessage(automationJobId);
+
+    if (queueResult.success) {
+      queueMessage = "Content item created, automation job queued, and SQS message sent successfully.";
+    } else if (queueResult.skipped) {
+      queueMessage =
+        "Content item created and automation job queued. AWS SQS is not configured, so automatic execution was skipped.";
+    } else {
+      queueMessage = `Content item created and automation job queued, but SQS enqueue failed: ${queueResult.error}`;
+    }
   }
 
   revalidatePath("/content");
@@ -86,7 +105,7 @@ export async function createContentItem(
 
   return {
     status: "success",
-    message: "Content item created and automation job queued successfully."
+    message: queueMessage
   };
 }
 

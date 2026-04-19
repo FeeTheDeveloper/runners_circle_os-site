@@ -7,16 +7,28 @@ import { prisma } from "@/lib/db/prisma";
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
 import { getContentPublishJobPayload } from "@/lib/jobs/payload";
 
+const PROCESSING_LOCK_WINDOW_MS = 5 * 60 * 1000;
+
 type ExecuteAutomationJobResult = {
   ok: boolean;
   jobId: string;
   message: string;
-  state: "completed" | "failed" | "already-completed" | "already-processing";
+  state: "completed" | "failed" | "already-completed" | "already-processing" | "not-runnable";
 };
 
 type ExecuteAutomationJobOptions = {
-  allowRunningJob: boolean;
+  allowFailedRetry: boolean;
+  allowStaleProcessingTakeover: boolean;
+  ignoreProcessingLock: boolean;
 };
+
+function isWithinProcessingLockWindow(job: AutomationJob) {
+  if (!job.startedAt) {
+    return false;
+  }
+
+  return Date.now() - job.startedAt.getTime() < PROCESSING_LOCK_WINDOW_MS;
+}
 
 function getContentJobContext(job: AutomationJob) {
   const payload = getContentPublishJobPayload(job.payload);
@@ -89,7 +101,9 @@ async function runAutomationJob(
   let job = existingJob;
 
   if (existingJob.status === JOB_STATUS_TO_DB[JOB_STATUS.PROCESSING]) {
-    if (!options.allowRunningJob) {
+    if (options.ignoreProcessingLock) {
+      job = existingJob;
+    } else if (isWithinProcessingLockWindow(existingJob)) {
       return {
         ok: true,
         jobId,
@@ -97,8 +111,30 @@ async function runAutomationJob(
         state: "already-processing"
       };
     }
+
+    if (!options.allowStaleProcessingTakeover) {
+      return {
+        ok: false,
+        jobId,
+        message: "This automation job is already processing and cannot be claimed right now.",
+        state: "not-runnable"
+      };
+    }
+
+    job = await markJobProcessing(jobId, ["RUNNING"]);
+  } else if (existingJob.status === JOB_STATUS_TO_DB[JOB_STATUS.FAILED]) {
+    if (!options.allowFailedRetry) {
+      return {
+        ok: false,
+        jobId,
+        message: "This automation job is failed and must be re-queued before it can run again.",
+        state: "not-runnable"
+      };
+    }
+
+    job = await markJobProcessing(jobId, ["FAILED"]);
   } else {
-    job = await markJobProcessing(jobId, ["QUEUED", "FAILED"]);
+    job = await markJobProcessing(jobId, ["QUEUED"]);
   }
 
   try {
@@ -137,12 +173,16 @@ async function runAutomationJob(
 
 export async function executeAutomationJob(jobId: string) {
   return runAutomationJob(jobId, {
-    allowRunningJob: false
+    allowFailedRetry: false,
+    allowStaleProcessingTakeover: true,
+    ignoreProcessingLock: false
   });
 }
 
 export async function continueAutomationJob(jobId: string) {
   return runAutomationJob(jobId, {
-    allowRunningJob: true
+    allowFailedRetry: false,
+    allowStaleProcessingTakeover: true,
+    ignoreProcessingLock: true
   });
 }

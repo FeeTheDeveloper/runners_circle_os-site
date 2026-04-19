@@ -108,6 +108,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                       <TableHead>Job</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
+                      <TableHead>Updated</TableHead>
                       <TableHead>Content</TableHead>
                       <TableHead>Campaign</TableHead>
                       <TableHead>Scheduled</TableHead>
@@ -131,6 +132,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                           </div>
                         </TableCell>
                         <TableCell>{formatDateTime(job.createdAt)}</TableCell>
+                        <TableCell>{formatDateTime(job.updatedAt)}</TableCell>
                         <TableCell>
                           {job.contentTitle ? (
                             <div className="space-y-1">

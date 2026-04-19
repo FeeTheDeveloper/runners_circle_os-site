@@ -19,6 +19,7 @@ export type JobListItem = {
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   contentItemId: string | null;
   contentTitle: string | null;
   campaignId: string | null;
@@ -53,6 +54,7 @@ export async function listAutomationJobs(filters: JobFilters) {
             startedAt: true,
             completedAt: true,
             createdAt: true,
+            updatedAt: true,
             payload: true,
             result: true
           }
@@ -69,6 +71,7 @@ export async function listAutomationJobs(filters: JobFilters) {
               startedAt: job.startedAt,
               completedAt: job.completedAt,
               createdAt: job.createdAt,
+              updatedAt: job.updatedAt,
               contentItemId: contentPublishPayload?.contentItemId ?? null,
               contentTitle: contentPublishPayload?.contentTitle ?? null,
               campaignId: contentPublishPayload?.campaignId ?? null,
@@ -195,6 +198,20 @@ export async function markJobComplete(id: string, result: Prisma.InputJsonValue)
       status: JOB_STATUS_TO_DB[JOB_STATUS.COMPLETED],
       completedAt: new Date(),
       result
+    }
+  });
+}
+
+export async function markJobQueued(id: string): Promise<AutomationJob> {
+  return prisma.automationJob.update({
+    where: {
+      id
+    },
+    data: {
+      status: JOB_STATUS_TO_DB[JOB_STATUS.QUEUED],
+      startedAt: null,
+      completedAt: null,
+      result: Prisma.DbNull
     }
   });
 }

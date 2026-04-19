@@ -127,6 +127,15 @@ npm.cmd run dev
 - Internal mutations live in `actions/*.ts` and write through Prisma with zod validation and route revalidation.
 - Authenticated writes now persist local user ownership for campaigns, content, audiences, and leads.
 
+## Automation Queue Flow
+
+- Automatic SQS enqueueing uses `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and `AWS_SQS_QUEUE_URL`.
+- Create an SQS queue in AWS, copy its queue URL into `AWS_SQS_QUEUE_URL`, and use IAM credentials that can send, receive, and delete messages on that queue.
+- Creating content inserts a queued `AutomationJob` in Prisma first and then attempts to enqueue its `jobId` to SQS.
+- If AWS queue env vars are missing, content creation still succeeds and the app logs that automatic queueing was skipped.
+- Run the queue worker locally with `npm.cmd run sqs:worker`.
+- Manual `Run now` and `Retry` controls remain available in `/jobs` as a fallback when automatic execution is unavailable or when a job needs operator intervention.
+
 ## Prisma Domain Coverage
 
 The initial schema includes:

@@ -5,10 +5,9 @@ import {
 } from "@aws-sdk/client-sqs";
 
 import { getSqsClient, getSqsQueueConfig } from "../lib/aws/sqs";
-import { getAutomationJobById } from "../lib/db/jobs";
 import { prisma } from "../lib/db/prisma";
 import { isDatabaseConfigured } from "../lib/db/runtime";
-import { processJob } from "../lib/jobs/worker";
+import { executeAutomationJob } from "../lib/jobs/execute-job";
 
 const MAX_MESSAGES_PER_CYCLE = 5;
 const POLL_DELAY_MS = 2_000;
@@ -18,9 +17,6 @@ let keepRunning = true;
 
 type QueueMessageBody = {
   jobId: string;
-  type: string;
-  payload: unknown;
-  scheduledFor: string | null;
 };
 
 function delay(ms: number) {
@@ -85,7 +81,7 @@ function parseMessageBody(
       };
     }
 
-    const { jobId, type, payload, scheduledFor } = parsed;
+    const { jobId } = parsed;
 
     if (typeof jobId !== "string" || jobId.length === 0) {
       return {
@@ -94,34 +90,10 @@ function parseMessageBody(
       };
     }
 
-    if (typeof type !== "string" || type.length === 0) {
-      return {
-        ok: false,
-        error: "Message body must include a non-empty type string."
-      };
-    }
-
-    if (!Object.hasOwn(parsed, "payload")) {
-      return {
-        ok: false,
-        error: "Message body must include a payload field."
-      };
-    }
-
-    if (scheduledFor !== null && typeof scheduledFor !== "string") {
-      return {
-        ok: false,
-        error: "Message body scheduledFor must be a string or null."
-      };
-    }
-
     return {
       ok: true,
       value: {
-        jobId,
-        type,
-        payload,
-        scheduledFor
+        jobId
       }
     };
   } catch {
@@ -170,45 +142,39 @@ async function handleMessage(
     return;
   }
 
-  const { jobId, scheduledFor, type } = parsedBody.value;
-  const job = await getAutomationJobById(jobId);
+  const { jobId } = parsedBody.value;
 
-  if (!job) {
-    log("Received SQS message for a missing job. Deleting it from the queue.", {
-      messageId,
-      jobId,
-      type,
-      scheduledFor
-    });
-    await deleteMessage(client, queueUrl, message);
-    return;
-  }
-
-  log("Processing automation job from SQS.", {
+  log("Starting automation job execution from SQS.", {
     messageId,
     jobId,
-    type,
-    scheduledFor,
-    status: job.status
+    source: "sqs"
   });
 
-  const result = await processJob(job);
+  const result = await executeAutomationJob(jobId);
 
-  if (!result.ok) {
-    logError("Job processing failed. Leaving the SQS message in the queue for retry.", {
+  if (result.state === "completed" || result.state === "already-completed") {
+    await deleteMessage(client, queueUrl, message);
+    log("Completed automation job from SQS and deleted the message.", {
       messageId,
       jobId,
-      type,
-      error: result.error ?? "Unknown processing error"
+      state: result.state
     });
     return;
   }
 
-  await deleteMessage(client, queueUrl, message);
-  log("Processed automation job and deleted the SQS message.", {
+  if (result.state === "already-processing") {
+    log("Automation job is already processing. Leaving the SQS message for later retry.", {
+      messageId,
+      jobId
+    });
+    return;
+  }
+
+  logError("Automation job execution did not complete from SQS. Leaving the message in the queue.", {
     messageId,
     jobId,
-    type
+    state: result.state,
+    error: result.message
   });
 }
 
