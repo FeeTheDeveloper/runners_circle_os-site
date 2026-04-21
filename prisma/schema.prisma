@@ -68,6 +68,8 @@ enum JobType {
   LEAD_ENRICHMENT
   REPORT_EXPORT
   AUDIENCE_REFRESH
+  GENERATE_IMAGE
+  GENERATE_VIDEO
 }
 
 enum JobStatus {
@@ -96,6 +98,28 @@ enum IntegrationProvider {
   SOCIAL @map("social")
 }
 
+enum CreatorRequestType {
+  IMAGE
+  VIDEO
+}
+
+enum CreatorRequestStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum GeneratedAssetType {
+  IMAGE
+  VIDEO
+}
+
+enum GeneratedAssetStatus {
+  READY
+  FAILED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -111,6 +135,8 @@ model User {
   contentItemsCreated     ContentItem[]
   audienceSegmentsCreated AudienceSegment[]
   leadsCreated            Lead[]
+  creatorRequestsCreated  CreatorRequest[]
+  generatedAssetsCreated  GeneratedAsset[]
 
   @@index([role, status])
 }
@@ -127,8 +153,10 @@ model Campaign {
   updatedAt   DateTime       @updatedAt
   createdById String?
 
-  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  contentItems ContentItem[]
+  createdBy       User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  contentItems    ContentItem[]
+  creatorRequests CreatorRequest[]
+  generatedAssets GeneratedAsset[]
 
   @@index([status])
   @@index([startDate, endDate])
@@ -149,8 +177,9 @@ model ContentItem {
   campaignId   String?
   createdById  String?
 
-  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy       User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  generatedAssets GeneratedAsset[]
 
   @@index([platform, status])
   @@index([campaignId])
@@ -168,7 +197,7 @@ model AudienceSegment {
   createdById String?
 
   leads     Lead[]
-  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy User?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([name])
   @@index([marketLane])
@@ -236,14 +265,70 @@ model AutomationJob {
   @@index([scheduledFor])
 }
 
+model CreatorRequest {
+  id          String               @id @default(cuid())
+  type        CreatorRequestType
+  templateKey String
+  platform    ContentPlatform
+  format      String
+  brandSlug   String
+  headline    String
+  body        String
+  cta         String
+  status      CreatorRequestStatus @default(QUEUED)
+  payload     Json
+  campaignId  String?
+  createdById String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy       User             @relation(fields: [createdById], references: [id])
+  generatedAssets GeneratedAsset[]
+
+  @@index([type, status])
+  @@index([campaignId])
+  @@index([createdById])
+}
+
+model GeneratedAsset {
+  id          String               @id @default(cuid())
+  requestId   String
+  assetType   GeneratedAssetType
+  title       String
+  url         String
+  storageKey  String?
+  width       Int?
+  height      Int?
+  durationSec Int?
+  status      GeneratedAssetStatus @default(READY)
+  metadata    Json
+  campaignId  String?
+  contentId   String?
+  createdById String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  request   CreatorRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  campaign  Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  content   ContentItem?   @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  createdBy User           @relation(fields: [createdById], references: [id])
+
+  @@index([requestId])
+  @@index([assetType, status])
+  @@index([campaignId])
+  @@index([contentId])
+  @@index([createdById])
+}
+
 model ChannelAccount {
-  id                      String        @id @default(cuid())
+  id                      String          @id @default(cuid())
   platform                ContentPlatform
   accountName             String
   accountId               String
-  status                  AccountStatus @default(ACTIVE)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  status                  AccountStatus   @default(ACTIVE)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
   integrationConnectionId String?
 
   integrationConnection IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
@@ -253,13 +338,13 @@ model ChannelAccount {
 }
 
 model IntegrationConnection {
-  id           String            @id @default(cuid())
+  id           String              @id @default(cuid())
   provider     IntegrationProvider
-  status       IntegrationStatus @default(PENDING)
+  status       IntegrationStatus   @default(PENDING)
   metadata     Json?
   lastSyncedAt DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   channelAccounts ChannelAccount[]
 

@@ -65,7 +65,8 @@ export function statusTone(status: string) {
       "configured",
       "succeeded",
       "completed",
-      "healthy"
+      "healthy",
+      "ready"
     ].includes(normalized)
   ) {
     return "success" as const;

@@ -33,7 +33,9 @@ export const jobTypeOptions = [
   "CRM_SYNC",
   "LEAD_ENRICHMENT",
   "REPORT_EXPORT",
-  "AUDIENCE_REFRESH"
+  "AUDIENCE_REFRESH",
+  "GENERATE_IMAGE",
+  "GENERATE_VIDEO"
 ] as const;
 
 export const jobStatusOptions = ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"] as const;

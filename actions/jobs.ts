@@ -60,7 +60,9 @@ export async function runAutomationJob(
     const result = await executeAutomationJob(jobId);
 
     revalidatePath("/jobs");
+    revalidatePath("/creator");
     revalidatePath("/dashboard");
+    revalidatePath("/content");
 
     return {
       status: result.ok ? "success" : "error",
@@ -111,7 +113,9 @@ export async function retryAutomationJob(
     const queueResult = await enqueueJobMessage(jobId);
 
     revalidatePath("/jobs");
+    revalidatePath("/creator");
     revalidatePath("/dashboard");
+    revalidatePath("/content");
 
     if (queueResult.success) {
       return {

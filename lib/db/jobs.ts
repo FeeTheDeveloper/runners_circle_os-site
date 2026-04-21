@@ -1,7 +1,7 @@
 import { Prisma, type AutomationJob, type JobStatus, type JobType } from "@prisma/client";
 
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
-import { getContentPublishJobPayload } from "@/lib/jobs/payload";
+import { getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
 import { getJobResultDetails } from "@/lib/jobs/result";
 import { prisma } from "@/lib/db/prisma";
 import { runReadQuery } from "@/lib/db/runtime";
@@ -61,6 +61,7 @@ export async function listAutomationJobs(filters: JobFilters) {
         }).then((jobs) =>
           jobs.map((job) => {
             const contentPublishPayload = getContentPublishJobPayload(job.payload);
+            const creatorPayload = getCreatorGenerationJobPayload(job.payload);
             const resultDetails = getJobResultDetails(job.result);
 
             return {
@@ -72,10 +73,19 @@ export async function listAutomationJobs(filters: JobFilters) {
               completedAt: job.completedAt,
               createdAt: job.createdAt,
               updatedAt: job.updatedAt,
-              contentItemId: contentPublishPayload?.contentItemId ?? null,
-              contentTitle: contentPublishPayload?.contentTitle ?? null,
-              campaignId: contentPublishPayload?.campaignId ?? null,
-              campaignName: contentPublishPayload?.campaignName ?? null,
+              contentItemId: resultDetails.contentId ?? contentPublishPayload?.contentItemId ?? null,
+              contentTitle:
+                resultDetails.contentTitle ??
+                contentPublishPayload?.contentTitle ??
+                creatorPayload?.requestHeadline ??
+                null,
+              campaignId:
+                resultDetails.campaignId ?? contentPublishPayload?.campaignId ?? creatorPayload?.campaignId ?? null,
+              campaignName:
+                resultDetails.campaignName ??
+                contentPublishPayload?.campaignName ??
+                creatorPayload?.campaignName ??
+                null,
               resultSummary: resultDetails.summary,
               errorMessage: resultDetails.error
             };
