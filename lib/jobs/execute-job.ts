@@ -7,8 +7,10 @@ import { generateVideoAsset } from "@/lib/creator/generate-video";
 import type { CreatorTemplateKey } from "@/lib/creator/types";
 import { getAutomationJobById, markJobComplete, markJobFailed, markJobProcessing } from "@/lib/db/jobs";
 import { prisma } from "@/lib/db/prisma";
+import { notifyN8nJobComplete } from "@/lib/integrations/n8n";
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
 import { getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
+import { getJobResultDetails } from "@/lib/jobs/result";
 
 const PROCESSING_LOCK_WINDOW_MS = 5 * 60 * 1000;
 
@@ -33,6 +35,8 @@ type JobFailureContext = {
   campaignId: string | null;
   campaignName: string | null;
 };
+
+type JobWebhookStatus = "completed" | "failed";
 
 function isWithinProcessingLockWindow(job: AutomationJob) {
   if (!job.startedAt) {
@@ -98,6 +102,48 @@ function getJobFailureContext(job: AutomationJob): JobFailureContext {
   return getContentJobContext(job);
 }
 
+function getJobCreatedById(job: AutomationJob) {
+  const contentPayload = getContentPublishJobPayload(job.payload);
+
+  if (contentPayload?.createdById) {
+    return contentPayload.createdById;
+  }
+
+  const creatorPayload = getCreatorGenerationJobPayload(job.payload);
+
+  return creatorPayload?.createdById ?? null;
+}
+
+function getJobBrandSlug(job: AutomationJob) {
+  const creatorPayload = getCreatorGenerationJobPayload(job.payload);
+
+  return creatorPayload?.brandSlug ?? getJsonString(job.payload, "brandSlug");
+}
+
+function getJobAssetUrl(job: AutomationJob) {
+  return getJsonString(job.result, "assetUrl") ?? getJsonString(job.payload, "assetUrl");
+}
+
+async function sendJobCompletionWebhook(job: AutomationJob, status: JobWebhookStatus, message: string) {
+  const contentPayload = getContentPublishJobPayload(job.payload);
+  const creatorPayload = getCreatorGenerationJobPayload(job.payload);
+  const resultDetails = getJobResultDetails(job.result);
+
+  await notifyN8nJobComplete({
+    jobId: job.id,
+    jobType: job.type,
+    status,
+    campaignId: resultDetails.campaignId ?? contentPayload?.campaignId ?? creatorPayload?.campaignId ?? null,
+    contentId: resultDetails.contentId ?? contentPayload?.contentItemId ?? null,
+    brandSlug: getJobBrandSlug(job),
+    assetUrl: getJobAssetUrl(job),
+    message,
+    result: job.result ?? job.payload ?? null,
+    createdById: getJobCreatedById(job),
+    completedAt: job.completedAt?.toISOString() ?? new Date().toISOString()
+  });
+}
+
 async function processContentPublishJob(job: AutomationJob) {
   const payload = getContentPublishJobPayload(job.payload);
   const contentId = payload?.contentItemId;
@@ -113,6 +159,7 @@ async function processContentPublishJob(job: AutomationJob) {
     select: {
       id: true,
       title: true,
+      mediaUrl: true,
       campaignId: true,
       campaign: {
         select: {
@@ -133,6 +180,7 @@ async function processContentPublishJob(job: AutomationJob) {
     contentTitle: content.title,
     campaignId: content.campaignId ?? payload?.campaignId ?? null,
     campaignName: content.campaign?.name ?? payload?.campaignName ?? null,
+    assetUrl: content.mediaUrl ?? null,
     processedAt: new Date().toISOString(),
     summary: "Content publish job processed successfully"
   } satisfies Prisma.InputJsonValue;
@@ -239,6 +287,7 @@ async function processCreatorGenerationJob(job: AutomationJob, mode: "IMAGE" | "
       recoveredAt: new Date().toISOString(),
       generatedAssetId: existingAsset.id,
       contentId: existingAsset.contentId,
+      assetUrl: getJsonString(request.payload, "assetUrl"),
       summary: `${mode === "IMAGE" ? "Image" : "Video"} asset already existed and was reused.`
     });
 
@@ -251,6 +300,7 @@ async function processCreatorGenerationJob(job: AutomationJob, mode: "IMAGE" | "
       contentTitle: existingAsset.content?.title ?? request.headline,
       campaignId: existingAsset.campaignId ?? request.campaignId,
       campaignName: request.campaign?.name ?? payload?.campaignName ?? null,
+      assetUrl: getJsonString(request.payload, "assetUrl"),
       processedAt: new Date().toISOString(),
       summary: `${mode === "IMAGE" ? "Image" : "Video"} asset already existed and was reused.`
     } satisfies Prisma.InputJsonValue;
@@ -348,6 +398,7 @@ async function processCreatorGenerationJob(job: AutomationJob, mode: "IMAGE" | "
           processedAt,
           generatedAssetId: asset.id,
           contentId: content.id,
+          assetUrl: generatedAsset.url,
           summary
         })
       }
@@ -369,6 +420,7 @@ async function processCreatorGenerationJob(job: AutomationJob, mode: "IMAGE" | "
     contentTitle: createdRecords.contentTitle,
     campaignId: request.campaignId ?? payload?.campaignId ?? null,
     campaignName: request.campaign?.name ?? payload?.campaignName ?? null,
+    assetUrl: generatedAsset.url,
     processedAt,
     summary
   } satisfies Prisma.InputJsonValue;
@@ -450,7 +502,8 @@ async function runAutomationJob(
   try {
     const result = await executeLoadedJob(job);
 
-    await markJobComplete(job.id, result);
+    const completedJob = await markJobComplete(job.id, result);
+    await sendJobCompletionWebhook(completedJob, "completed", "Job completed successfully");
 
     return {
       ok: true,
@@ -470,7 +523,7 @@ async function runAutomationJob(
       });
     }
 
-    await markJobFailed(job.id, {
+    const failedJob = await markJobFailed(job.id, {
       success: false,
       action: context.action,
       requestId: context.requestId,
@@ -478,10 +531,12 @@ async function runAutomationJob(
       contentTitle: context.contentTitle,
       campaignId: context.campaignId,
       campaignName: context.campaignName,
+      assetUrl: getJsonString(job.payload, "assetUrl"),
       processedAt: new Date().toISOString(),
       error: message,
       summary: message
     });
+    await sendJobCompletionWebhook(failedJob, "failed", message);
 
     return {
       ok: false,
