@@ -35,8 +35,9 @@ function logQueueError(message: string, details?: Record<string, unknown>) {
   console.error(`[sqs-queue] ${message}`);
 }
 
-export async function enqueueJobMessage(jobId: string): Promise<QueueDispatchResult> {
+export async function enqueueJob(payload: Record<string, unknown>): Promise<QueueDispatchResult> {
   const config = getSqsQueueConfig();
+  const jobId = typeof payload.jobId === "string" ? payload.jobId : "unknown";
 
   if (!config) {
     logQueueInfo("Skipping SQS enqueue because AWS queue configuration is missing.", {
@@ -55,12 +56,11 @@ export async function enqueueJobMessage(jobId: string): Promise<QueueDispatchRes
   const isFifoQueue = config.queueUrl.endsWith(".fifo");
 
   try {
+    // The AWS SDK signs the request automatically with SigV4.
     const response = await client.send(
       new SendMessageCommand({
         QueueUrl: config.queueUrl,
-        MessageBody: JSON.stringify({
-          jobId
-        }),
+        MessageBody: JSON.stringify(payload),
         ...(isFifoQueue
           ? {
               MessageDeduplicationId: jobId,
@@ -92,6 +92,10 @@ export async function enqueueJobMessage(jobId: string): Promise<QueueDispatchRes
       error: message
     };
   }
+}
+
+export async function enqueueJobMessage(jobId: string): Promise<QueueDispatchResult> {
+  return enqueueJob({ jobId });
 }
 
 export async function sendToQueue(job: AutomationJob): Promise<QueueDispatchResult> {
