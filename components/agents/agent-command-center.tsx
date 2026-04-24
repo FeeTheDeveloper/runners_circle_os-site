@@ -11,6 +11,7 @@ import { agentRegistry, getAgentDefinition } from "@/lib/agents/agent-registry";
 import { businessPresets, getBusinessPreset } from "@/lib/agents/business-presets";
 import { getDefaultOutputPresetForAgent, getOutputPreset, listOutputPresetsForAgent } from "@/lib/agents/output-presets";
 import { initialActionState } from "@/lib/utils/action-state";
+import type { ContentPlatform } from "@/lib/utils/domain-options";
 import { contentPlatformOptions } from "@/lib/utils/domain-options";
 import { formatDateTime, formatTokenLabel } from "@/lib/utils/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +54,13 @@ type PreviewState = {
 const defaultBusiness = getBusinessPreset("fee-the-developer") ?? businessPresets[0];
 const defaultGoal = defaultBusiness?.defaultGoals[0] ?? "";
 const defaultOutputPreset = getOutputPreset("content_pack_5_posts_2_videos") ?? getDefaultOutputPresetForAgent("content_creator");
+const platformSelectOptions: Array<{ label: string; value: ContentPlatform | undefined }> = [
+  { label: "No platform constraint", value: undefined },
+  ...contentPlatformOptions.map((platform) => ({
+    label: formatTokenLabel(platform),
+    value: platform
+  }))
+];
 
 const initialPreviewState: PreviewState = {
   status: "idle",
@@ -65,6 +73,7 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
   const [selectedGoalPreset, setSelectedGoalPreset] = useState(defaultGoal);
   const [goal, setGoal] = useState(defaultGoal);
   const [selectedOutputPresetKey, setSelectedOutputPresetKey] = useState(defaultOutputPreset?.key ?? "");
+  const [selectedPlatform, setSelectedPlatform] = useState<ContentPlatform | undefined>(undefined);
   const [previewState, previewAction] = useActionState(generateAgentPromptPreview, initialPreviewState);
   const [approveState, approveAction] = useActionState(approveAgentPrompt, initialActionState);
 
@@ -205,11 +214,19 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
                   </FormField>
 
                   <FormField error={previewState.fieldErrors?.platform?.[0]} htmlFor="agent-platform" label="Platform">
-                    <Select defaultValue="none" id="agent-platform" name="platform">
-                      <option value="none">No platform constraint</option>
-                      {contentPlatformOptions.map((platform) => (
-                        <option key={platform} value={platform}>
-                          {formatTokenLabel(platform)}
+                    <Select
+                      id="agent-platform"
+                      name={selectedPlatform ? "platform" : undefined}
+                      onChange={(event) =>
+                        setSelectedPlatform(
+                          event.currentTarget.value.length > 0 ? (event.currentTarget.value as ContentPlatform) : undefined
+                        )
+                      }
+                      value={selectedPlatform ?? ""}
+                    >
+                      {platformSelectOptions.map((platformOption) => (
+                        <option key={platformOption.value ?? "default"} value={platformOption.value ?? ""}>
+                          {platformOption.label}
                         </option>
                       ))}
                     </Select>

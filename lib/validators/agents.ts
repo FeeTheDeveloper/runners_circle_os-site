@@ -4,7 +4,7 @@ import { getAgentDefinition } from "@/lib/agents/agent-registry";
 import { businessPresets } from "@/lib/agents/business-presets";
 import { getOutputPreset } from "@/lib/agents/output-presets";
 import { agentJobTypeOptions, agentTypeOptions } from "@/lib/agents/types";
-import { contentPlatformOptions } from "@/lib/utils/domain-options";
+import { contentPlatformSchema } from "@/lib/validators/content";
 
 const knownBusinessSlugs = businessPresets.map((business) => business.slug);
 
@@ -16,7 +16,7 @@ const baseAgentFields = z.object({
   goal: z.string().trim().min(8).max(500),
   outputPresetKey: z.string().trim().min(2).max(120),
   campaignId: z.string().trim().min(1).optional().nullable(),
-  platform: z.enum(contentPlatformOptions).optional().nullable(),
+  platform: contentPlatformSchema.optional().nullable(),
   contentId: z.string().trim().min(1).optional().nullable()
 });
 

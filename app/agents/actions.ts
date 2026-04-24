@@ -14,12 +14,28 @@ import { isDatabaseConfigured, normalizeDatabaseError, prisma } from "@/lib/db";
 import { ensureSessionUserRecord } from "@/lib/db/user-actors";
 import { createAgentPromptJob } from "@/lib/jobs/create-job";
 import type { ActionState } from "@/lib/utils/action-state";
+import { normalizeContentPlatform } from "@/lib/utils/domain-options";
 import { getOptionalId, getOptionalString, getRequiredString } from "@/lib/utils/form-data";
 import { approveAgentPromptSchema, generateAgentPromptSchema } from "@/lib/validators/agents";
 
 export type AgentPromptPreviewState = ActionState & {
   preview?: BuiltAgentPrompt | null;
 };
+
+function sanitizeAgentPromptPayloadPlatform(payload: unknown): BuiltAgentPrompt["payload"] | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  return {
+    ...(payload as BuiltAgentPrompt["payload"]),
+    platform: normalizeContentPlatform(
+      typeof (payload as { platform?: unknown }).platform === "string"
+        ? (payload as { platform?: string }).platform
+        : null
+    )
+  };
+}
 
 export async function generateAgentPromptPreview(
   _previousState: AgentPromptPreviewState,
@@ -33,7 +49,7 @@ export async function generateAgentPromptPreview(
     goal: getRequiredString(formData, "goal"),
     outputPresetKey: getRequiredString(formData, "outputPresetKey"),
     campaignId: getOptionalId(formData, "campaignId"),
-    platform: getOptionalString(formData, "platform")
+    platform: getOptionalString(formData, "platform") ?? null
   };
 
   const parsed = generateAgentPromptSchema.safeParse(input);
@@ -125,7 +141,17 @@ export async function approveAgentPrompt(
   let payload: BuiltAgentPrompt["payload"];
 
   try {
-    payload = JSON.parse(parsed.data.payloadJson) as BuiltAgentPrompt["payload"];
+    const parsedPayload = JSON.parse(parsed.data.payloadJson) as unknown;
+    const sanitizedPayload = sanitizeAgentPromptPayloadPlatform(parsedPayload);
+
+    if (!sanitizedPayload) {
+      return {
+        status: "error",
+        message: "The generated prompt payload was not a valid object."
+      };
+    }
+
+    payload = sanitizedPayload;
   } catch {
     return {
       status: "error",

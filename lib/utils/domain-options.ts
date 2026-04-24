@@ -17,6 +17,16 @@ export const contentPlatformOptions = [
   "WEB"
 ] as const;
 
+export type ContentPlatform = (typeof contentPlatformOptions)[number];
+
+export function isContentPlatform(value: string | null | undefined): value is ContentPlatform {
+  return typeof value === "string" && contentPlatformOptions.includes(value as ContentPlatform);
+}
+
+export function normalizeContentPlatform(value: string | null | undefined): ContentPlatform | null {
+  return isContentPlatform(value) ? value : null;
+}
+
 export const contentStatusOptions = [
   "DRAFT",
   "REVIEW",

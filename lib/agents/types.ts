@@ -1,3 +1,5 @@
+import type { ContentPlatform } from "@/lib/utils/domain-options";
+
 export const agentTypeOptions = [
   "campaign_builder",
   "content_creator",
@@ -52,7 +54,7 @@ export type AgentPromptBuilderInput = {
   outputPreset: OutputPreset;
   campaignId?: string | null;
   campaignName?: string | null;
-  platform?: string | null;
+  platform?: ContentPlatform | null;
   contentId?: string | null;
   contentTitle?: string | null;
 };
@@ -70,7 +72,7 @@ export type BuiltAgentPromptPayload = {
   outputConfig: OutputPresetPayload;
   campaignId: string | null;
   campaignName: string | null;
-  platform: string | null;
+  platform: ContentPlatform | null;
   contentId: string | null;
   contentTitle: string | null;
   sections: string[];
@@ -149,7 +151,7 @@ export type AgentPromptJobPayload = {
   campaignName: string | null;
   contentId: string | null;
   contentTitle: string | null;
-  platform: string | null;
+  platform: ContentPlatform | null;
   createdById: string;
   supabaseUserId: string;
   postCount: number | null;

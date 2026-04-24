@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import type { AgentPromptJobPayload } from "@/lib/agents/types";
+import { normalizeContentPlatform } from "@/lib/utils/domain-options";
 
 export type ContentPublishJobPayload = {
   createdById: string;
@@ -119,7 +120,7 @@ export function getAgentPromptJobPayload(payload: Prisma.JsonValue | null): Agen
     campaignName: getStringValue(payload.campaignName) ?? null,
     contentId: getStringValue(payload.contentId) ?? null,
     contentTitle: getStringValue(payload.contentTitle) ?? null,
-    platform: getStringValue(payload.platform) ?? null,
+    platform: normalizeContentPlatform(getStringValue(payload.platform)),
     createdById: getStringValue(payload.createdById) ?? "",
     supabaseUserId: getStringValue(payload.supabaseUserId) ?? "",
     postCount: getNumberValue(payload.postCount),

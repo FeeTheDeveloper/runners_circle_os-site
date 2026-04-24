@@ -7,6 +7,7 @@ import { agentJobTypeToDb } from "@/lib/agents/types";
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
 import type { ContentPublishJobPayload, CreatorGenerationJobPayload } from "@/lib/jobs/payload";
 import { prisma } from "@/lib/db/prisma";
+import { normalizeContentPlatform } from "@/lib/utils/domain-options";
 
 type JobWriteClient = Pick<typeof prisma, "automationJob" | "contentItem" | "creatorRequest" | "agentPrompt">;
 
@@ -215,7 +216,7 @@ export async function createAgentPromptJob(
     campaignName: agentPrompt.campaign?.name ?? null,
     contentId: agentPrompt.contentId,
     contentTitle: agentPrompt.content?.title ?? null,
-    platform: getStringProperty(payloadJson, "platform"),
+    platform: normalizeContentPlatform(getStringProperty(payloadJson, "platform")),
     createdById: input.createdById,
     supabaseUserId: input.supabaseUserId,
     postCount: getNumberProperty(payloadJson, "postCount"),
