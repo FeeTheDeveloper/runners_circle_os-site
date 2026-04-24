@@ -8,7 +8,8 @@ import type { DataSource } from "@/lib/db/runtime";
 
 import { approveAgentPrompt, generateAgentPromptPreview } from "@/app/agents/actions";
 import { agentRegistry, getAgentDefinition } from "@/lib/agents/agent-registry";
-import { brandKits, getBrandKit } from "@/lib/creator/brand-kits";
+import { businessPresets, getBusinessPreset } from "@/lib/agents/business-presets";
+import { getDefaultOutputPresetForAgent, getOutputPreset, listOutputPresetsForAgent } from "@/lib/agents/output-presets";
 import { initialActionState } from "@/lib/utils/action-state";
 import { contentPlatformOptions } from "@/lib/utils/domain-options";
 import { formatDateTime, formatTokenLabel } from "@/lib/utils/format";
@@ -49,24 +50,46 @@ type PreviewState = {
   preview?: BuiltAgentPrompt | null;
 };
 
+const defaultBusiness = getBusinessPreset("fee-the-developer") ?? businessPresets[0];
+const defaultGoal = defaultBusiness?.defaultGoals[0] ?? "";
+const defaultOutputPreset = getOutputPreset("content_pack_5_posts_2_videos") ?? getDefaultOutputPresetForAgent("content_creator");
+
 const initialPreviewState: PreviewState = {
   status: "idle",
   preview: null
 };
 
 export function AgentCommandCenter({ campaigns, prompts, source, summary }: AgentCommandCenterProps) {
-  const [selectedAgentType, setSelectedAgentType] = useState<AgentTypeValue>("campaign_builder");
-  const agentDefinition = getAgentDefinition(selectedAgentType) ?? agentRegistry[0];
-  const [selectedOutputType, setSelectedOutputType] = useState(agentDefinition.defaultOutputType);
+  const [selectedAgentType, setSelectedAgentType] = useState<AgentTypeValue>("content_creator");
+  const [selectedBusinessSlug, setSelectedBusinessSlug] = useState(defaultBusiness?.slug ?? "");
+  const [selectedGoalPreset, setSelectedGoalPreset] = useState(defaultGoal);
+  const [goal, setGoal] = useState(defaultGoal);
+  const [selectedOutputPresetKey, setSelectedOutputPresetKey] = useState(defaultOutputPreset?.key ?? "");
   const [previewState, previewAction] = useActionState(generateAgentPromptPreview, initialPreviewState);
   const [approveState, approveAction] = useActionState(approveAgentPrompt, initialActionState);
 
+  const agentDefinition = getAgentDefinition(selectedAgentType) ?? agentRegistry[0];
+  const selectedBusiness = getBusinessPreset(selectedBusinessSlug) ?? defaultBusiness;
+  const availableOutputPresets = useMemo(() => listOutputPresetsForAgent(selectedAgentType), [selectedAgentType]);
+
   useEffect(() => {
-    setSelectedOutputType(agentDefinition.defaultOutputType);
-  }, [agentDefinition.defaultOutputType]);
+    if (availableOutputPresets.some((preset) => preset.key === selectedOutputPresetKey)) {
+      return;
+    }
+
+    setSelectedOutputPresetKey(availableOutputPresets[0]?.key ?? "");
+  }, [availableOutputPresets, selectedOutputPresetKey]);
+
+  useEffect(() => {
+    const nextGoal = selectedBusiness?.defaultGoals[0] ?? "";
+
+    setSelectedGoalPreset(nextGoal);
+    setGoal(nextGoal);
+  }, [selectedBusinessSlug, selectedBusiness]);
 
   const preview = previewState.preview ?? null;
   const payloadJson = useMemo(() => (preview ? JSON.stringify(preview.payload) : ""), [preview]);
+  const selectedOutputPreset = getOutputPreset(selectedOutputPresetKey) ?? availableOutputPresets[0] ?? null;
 
   return (
     <div className="space-y-6">
@@ -112,18 +135,57 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
                       value={selectedAgentType}
                     >
                       {agentRegistry.map((agent) => (
-                        <option key={agent.type} value={agent.type}>
+                        <option key={agent.key} value={agent.key}>
                           {agent.label}
                         </option>
                       ))}
                     </Select>
                   </FormField>
 
-                  <FormField error={previewState.fieldErrors?.brandSlug?.[0]} htmlFor="agent-brand" label="Brand / business">
-                    <Select defaultValue={brandKits[0]?.slug} id="agent-brand" name="brandSlug">
-                      {brandKits.map((brand) => (
-                        <option key={brand.slug} value={brand.slug}>
-                          {brand.label}
+                  <FormField error={previewState.fieldErrors?.businessSlug?.[0]} htmlFor="agent-business" label="Business">
+                    <Select
+                      id="agent-business"
+                      name="businessSlug"
+                      onChange={(event) => setSelectedBusinessSlug(event.currentTarget.value)}
+                      value={selectedBusinessSlug}
+                    >
+                      {businessPresets.map((business) => (
+                        <option key={business.slug} value={business.slug}>
+                          {business.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField htmlFor="agent-goal-preset" label="Goal preset">
+                    <Select
+                      id="agent-goal-preset"
+                      onChange={(event) => {
+                        setSelectedGoalPreset(event.currentTarget.value);
+                        setGoal(event.currentTarget.value);
+                      }}
+                      value={selectedGoalPreset}
+                    >
+                      {selectedBusiness?.defaultGoals.map((goalOption) => (
+                        <option key={goalOption} value={goalOption}>
+                          {goalOption}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+
+                  <FormField error={previewState.fieldErrors?.outputPresetKey?.[0]} htmlFor="agent-output-preset" label="Output">
+                    <Select
+                      id="agent-output-preset"
+                      name="outputPresetKey"
+                      onChange={(event) => setSelectedOutputPresetKey(event.currentTarget.value)}
+                      value={selectedOutputPresetKey}
+                    >
+                      {availableOutputPresets.map((preset) => (
+                        <option key={preset.key} value={preset.key}>
+                          {preset.label}
                         </option>
                       ))}
                     </Select>
@@ -155,27 +217,29 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
                 </div>
 
                 <FormField error={previewState.fieldErrors?.goal?.[0]} htmlFor="agent-goal" label="Goal">
-                  <Textarea id="agent-goal" name="goal" placeholder={agentDefinition.goalPlaceholder} />
-                </FormField>
-
-                <FormField error={previewState.fieldErrors?.outputType?.[0]} htmlFor="agent-output-type" label="Output type">
-                  <Select
-                    id="agent-output-type"
-                    name="outputType"
-                    onChange={(event) => setSelectedOutputType(event.currentTarget.value)}
-                    value={selectedOutputType}
-                  >
-                    {agentDefinition.outputTypes.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
+                  <Textarea
+                    id="agent-goal"
+                    name="goal"
+                    onChange={(event) => setGoal(event.currentTarget.value)}
+                    placeholder={agentDefinition?.goalPlaceholder}
+                    value={goal}
+                  />
                 </FormField>
 
                 <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4 text-sm text-slate-300">
-                  <p className="font-semibold text-white">{agentDefinition.label}</p>
-                  <p className="mt-1 leading-6 text-slate-400">{agentDefinition.description}</p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="font-semibold text-white">{agentDefinition?.label}</p>
+                      <p className="mt-1 leading-6 text-slate-400">{agentDefinition?.description}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white">{selectedBusiness?.label}</p>
+                      <p className="mt-1 leading-6 text-slate-400">{selectedBusiness?.description}</p>
+                      {selectedOutputPreset ? (
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">{selectedOutputPreset.label}</p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
 
                 <FormMessage state={previewState} />
@@ -211,25 +275,32 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {prompts.map((prompt) => (
-                        <TableRow key={prompt.id}>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-medium text-white">{prompt.title}</p>
-                              <p className="text-xs text-slate-400">
-                                {getAgentDefinition(prompt.agentType as AgentTypeValue)?.label ?? formatTokenLabel(prompt.agentType)}
-                              </p>
-                              <p className="text-xs text-slate-500">{getBrandKit(prompt.brandSlug ?? "runners-circle").label}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={prompt.status} />
-                          </TableCell>
-                          <TableCell>{prompt.campaignName ?? "Unassigned"}</TableCell>
-                          <TableCell>{prompt.outputType ? formatTokenLabel(prompt.outputType) : "General"}</TableCell>
-                          <TableCell>{formatDateTime(prompt.createdAt)}</TableCell>
-                        </TableRow>
-                      ))}
+                      {prompts.map((prompt) => {
+                        const promptAgent = getAgentDefinition(prompt.agentType as AgentTypeValue);
+                        const promptBusiness = prompt.businessLabel
+                          ? prompt.businessLabel
+                          : getBusinessPreset(prompt.businessSlug ?? "runners-circle")?.label ?? formatTokenLabel(prompt.businessSlug ?? "unknown");
+
+                        return (
+                          <TableRow key={prompt.id}>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="font-medium text-white">{prompt.title}</p>
+                                <p className="text-xs text-slate-400">
+                                  {promptAgent?.label ?? formatTokenLabel(prompt.agentType)}
+                                </p>
+                                <p className="text-xs text-slate-500">{promptBusiness}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <StatusBadge status={prompt.status} />
+                            </TableCell>
+                            <TableCell>{prompt.campaignName ?? "Unassigned"}</TableCell>
+                            <TableCell>{prompt.outputLabel ?? formatTokenLabel(prompt.outputPresetKey ?? "general")}</TableCell>
+                            <TableCell>{formatDateTime(prompt.createdAt)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableWrapper>
@@ -253,10 +324,33 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
           <CardContent className="space-y-5">
             {preview ? (
               <>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Selected values</p>
+                    <div className="mt-3 space-y-2 text-sm text-slate-300">
+                      <p><span className="text-slate-500">Agent:</span> {getAgentDefinition(preview.payload.agentType)?.label ?? formatTokenLabel(preview.payload.agentType)}</p>
+                      <p><span className="text-slate-500">Business:</span> {preview.payload.businessLabel}</p>
+                      <p><span className="text-slate-500">Goal:</span> {preview.payload.goal}</p>
+                      <p><span className="text-slate-500">Output:</span> {preview.payload.outputLabel}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Preset payload</p>
+                    <div className="mt-3 space-y-2 text-sm text-slate-300">
+                      <p><span className="text-slate-500">Posts:</span> {preview.payload.postCount ?? "n/a"}</p>
+                      <p><span className="text-slate-500">Video scripts:</span> {preview.payload.videoScriptCount ?? "n/a"}</p>
+                      <p><span className="text-slate-500">Captions:</span> {preview.payload.includeCaptions ? "Included" : "Optional"}</p>
+                      <p><span className="text-slate-500">Image prompts:</span> {preview.payload.includeImagePrompts ? "Included" : "Optional"}</p>
+                      <p><span className="text-slate-500">CTAs:</span> {preview.payload.includeCtas ? "Included" : "Optional"}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-5">
-                  <p className="text-sm font-semibold text-slate-300">{agentDefinition.previewLabel}</p>
+                  <p className="text-sm font-semibold text-slate-300">{agentDefinition?.previewLabel}</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">{preview.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-400 whitespace-pre-wrap">{preview.prompt}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-400">{preview.prompt}</p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-5">
@@ -287,7 +381,7 @@ export function AgentCommandCenter({ campaigns, prompts, source, summary }: Agen
               </>
             ) : (
               <EmptyState
-                description="Generate a prompt from the left-hand form to review its title, prompt body, payload, and recommended job type."
+                description="Generate a prompt from the left-hand form to review its selected presets, prompt body, payload, and recommended job type."
                 title="No prompt preview yet"
               />
             )}

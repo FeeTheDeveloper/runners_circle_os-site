@@ -9,8 +9,10 @@ export type AgentPromptListItem = {
   title: string;
   prompt: string;
   status: string;
-  brandSlug: string | null;
-  outputType: string | null;
+  businessSlug: string | null;
+  businessLabel: string | null;
+  outputPresetKey: string | null;
+  outputLabel: string | null;
   recommendedJobType: string | null;
   campaignId: string | null;
   campaignName: string | null;
@@ -80,8 +82,10 @@ export async function getAgentsWorkspaceData() {
           title: prompt.title,
           prompt: prompt.prompt,
           status: prompt.status.toLowerCase(),
-          brandSlug: getPayloadValue(prompt.payload, "brandSlug"),
-          outputType: getPayloadValue(prompt.payload, "outputType"),
+          businessSlug: getPayloadValue(prompt.payload, "businessSlug") ?? getPayloadValue(prompt.payload, "brandSlug"),
+          businessLabel: getPayloadValue(prompt.payload, "businessLabel"),
+          outputPresetKey: getPayloadValue(prompt.payload, "outputPresetKey") ?? getPayloadValue(prompt.payload, "outputType"),
+          outputLabel: getPayloadValue(prompt.payload, "outputLabel"),
           recommendedJobType: getPayloadValue(prompt.payload, "recommendedJobType"),
           campaignId: prompt.campaignId,
           campaignName: prompt.campaign?.name ?? null,

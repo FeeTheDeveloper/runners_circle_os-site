@@ -142,6 +142,24 @@ type CreateAgentPromptJobInput = {
   recommendedJobType: keyof typeof agentJobTypeToDb;
 };
 
+function getStringProperty(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "string" ? value : null;
+}
+
+function getNumberProperty(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "number" ? value : null;
+}
+
+function getBooleanProperty(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+
+  return typeof value === "boolean" ? value : null;
+}
+
 export async function createAgentPromptJob(
   input: CreateAgentPromptJobInput,
   db: JobWriteClient = prisma
@@ -185,17 +203,26 @@ export async function createAgentPromptJob(
       typeof payloadJson.agentType === "string" ? (payloadJson.agentType as AgentPromptJobPayload["agentType"]) : "campaign_builder",
     promptTitle: agentPrompt.title,
     prompt: agentPrompt.prompt,
-    brandSlug: typeof payloadJson.brandSlug === "string" ? payloadJson.brandSlug : "",
-    goal: typeof payloadJson.goal === "string" ? payloadJson.goal : "",
-    outputType: typeof payloadJson.outputType === "string" ? payloadJson.outputType : "",
+    businessSlug: getStringProperty(payloadJson, "businessSlug") ?? getStringProperty(payloadJson, "brandSlug") ?? "",
+    businessLabel: getStringProperty(payloadJson, "businessLabel") ?? "",
+    brandSlug: getStringProperty(payloadJson, "brandSlug") ?? getStringProperty(payloadJson, "businessSlug") ?? "",
+    goal: getStringProperty(payloadJson, "goal") ?? "",
+    outputPresetKey: getStringProperty(payloadJson, "outputPresetKey") ?? getStringProperty(payloadJson, "outputType") ?? "",
+    outputLabel: getStringProperty(payloadJson, "outputLabel") ?? "",
+    outputType: getStringProperty(payloadJson, "outputType") ?? "",
     recommendedJobType: input.recommendedJobType,
     campaignId: agentPrompt.campaignId,
     campaignName: agentPrompt.campaign?.name ?? null,
     contentId: agentPrompt.contentId,
     contentTitle: agentPrompt.content?.title ?? null,
-    platform: typeof payloadJson.platform === "string" ? payloadJson.platform : null,
+    platform: getStringProperty(payloadJson, "platform"),
     createdById: input.createdById,
-    supabaseUserId: input.supabaseUserId
+    supabaseUserId: input.supabaseUserId,
+    postCount: getNumberProperty(payloadJson, "postCount"),
+    videoScriptCount: getNumberProperty(payloadJson, "videoScriptCount"),
+    includeCaptions: getBooleanProperty(payloadJson, "includeCaptions"),
+    includeImagePrompts: getBooleanProperty(payloadJson, "includeImagePrompts"),
+    includeCtas: getBooleanProperty(payloadJson, "includeCtas")
   };
 
   return db.automationJob.create({

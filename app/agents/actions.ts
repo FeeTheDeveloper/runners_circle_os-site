@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { getAgentDefinition } from "@/lib/agents/agent-registry";
+import { getBusinessPreset } from "@/lib/agents/business-presets";
+import { getOutputPreset } from "@/lib/agents/output-presets";
 import { buildAgentPrompt } from "@/lib/agents/prompt-builder";
 import type { BuiltAgentPrompt } from "@/lib/agents/types";
 import { agentTypeToDb } from "@/lib/agents/types";
@@ -26,9 +29,9 @@ export async function generateAgentPromptPreview(
 
   const input = {
     agentType: getRequiredString(formData, "agentType"),
-    brandSlug: getRequiredString(formData, "brandSlug"),
+    businessSlug: getRequiredString(formData, "businessSlug"),
     goal: getRequiredString(formData, "goal"),
-    outputType: getRequiredString(formData, "outputType"),
+    outputPresetKey: getRequiredString(formData, "outputPresetKey"),
     campaignId: getOptionalId(formData, "campaignId"),
     platform: getOptionalString(formData, "platform")
   };
@@ -57,11 +60,23 @@ export async function generateAgentPromptPreview(
         .then((campaign) => campaign?.name ?? null)
     : null;
 
+  const agent = getAgentDefinition(parsed.data.agentType);
+  const business = getBusinessPreset(parsed.data.businessSlug);
+  const outputPreset = getOutputPreset(parsed.data.outputPresetKey);
+
+  if (!agent || !business || !outputPreset) {
+    return {
+      status: "error",
+      message: "The selected preset configuration could not be loaded.",
+      preview: null
+    };
+  }
+
   const preview = buildAgentPrompt({
-    agentType: parsed.data.agentType,
-    brandSlug: parsed.data.brandSlug,
+    agent,
+    business,
     goal: parsed.data.goal,
-    outputType: parsed.data.outputType,
+    outputPreset,
     campaignId: parsed.data.campaignId ?? null,
     campaignName,
     platform: parsed.data.platform ?? null

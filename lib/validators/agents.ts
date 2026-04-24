@@ -1,19 +1,20 @@
 import { z } from "zod";
 
 import { getAgentDefinition } from "@/lib/agents/agent-registry";
+import { businessPresets } from "@/lib/agents/business-presets";
+import { getOutputPreset } from "@/lib/agents/output-presets";
 import { agentJobTypeOptions, agentTypeOptions } from "@/lib/agents/types";
-import { brandKits } from "@/lib/creator/brand-kits";
 import { contentPlatformOptions } from "@/lib/utils/domain-options";
 
-const knownBrandSlugs = brandKits.map((brand) => brand.slug);
+const knownBusinessSlugs = businessPresets.map((business) => business.slug);
 
 const baseAgentFields = z.object({
   agentType: z.enum(agentTypeOptions),
-  brandSlug: z.string().trim().refine((value) => knownBrandSlugs.includes(value), {
-    message: "Choose a supported brand."
+  businessSlug: z.string().trim().refine((value) => knownBusinessSlugs.includes(value), {
+    message: "Choose a supported business."
   }),
   goal: z.string().trim().min(8).max(500),
-  outputType: z.string().trim().min(2).max(80),
+  outputPresetKey: z.string().trim().min(2).max(120),
   campaignId: z.string().trim().min(1).optional().nullable(),
   platform: z.enum(contentPlatformOptions).optional().nullable(),
   contentId: z.string().trim().min(1).optional().nullable()
@@ -31,13 +32,13 @@ export const generateAgentPromptSchema = baseAgentFields.superRefine((value, ctx
     return;
   }
 
-  const validOutputType = definition.outputTypes.some((option) => option.value === value.outputType);
+  const outputPreset = getOutputPreset(value.outputPresetKey);
 
-  if (!validOutputType) {
+  if (!outputPreset || !outputPreset.agentTypes.includes(value.agentType)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Choose a valid output type for the selected agent.",
-      path: ["outputType"]
+      message: "Choose a valid output preset for the selected agent.",
+      path: ["outputPresetKey"]
     });
   }
 });

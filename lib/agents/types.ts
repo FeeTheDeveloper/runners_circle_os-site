@@ -18,51 +18,75 @@ export type AgentTypeValue = (typeof agentTypeOptions)[number];
 export type AgentJobTypeValue = (typeof agentJobTypeOptions)[number];
 export type AgentPromptStatusValue = (typeof agentPromptStatusOptions)[number];
 
-export type AgentOutputOption = {
-  value: string;
-  label: string;
-  description: string;
-};
+export type OutputPresetPayloadValue = string | number | boolean | null;
+export type OutputPresetPayload = Record<string, OutputPresetPayloadValue>;
 
 export type AgentDefinition = {
-  type: AgentTypeValue;
+  key: AgentTypeValue;
   label: string;
   description: string;
   goalPlaceholder: string;
   previewLabel: string;
-  defaultOutputType: string;
   recommendedJobType: AgentJobTypeValue;
-  outputTypes: AgentOutputOption[];
+};
+
+export type BusinessPreset = {
+  slug: string;
+  label: string;
+  description: string;
+  defaultGoals: string[];
+  defaultCtas: string[];
+};
+
+export type OutputPreset = {
+  key: string;
+  label: string;
+  agentTypes: AgentTypeValue[];
+  payload: OutputPresetPayload;
 };
 
 export type AgentPromptBuilderInput = {
-  agentType: AgentTypeValue;
-  brandSlug: string;
+  agent: AgentDefinition;
+  business: BusinessPreset;
   goal: string;
+  outputPreset: OutputPreset;
   campaignId?: string | null;
   campaignName?: string | null;
   platform?: string | null;
-  outputType: string;
   contentId?: string | null;
   contentTitle?: string | null;
+};
+
+export type BuiltAgentPromptPayload = {
+  agentType: AgentTypeValue;
+  businessSlug: string;
+  businessLabel: string;
+  businessDescription: string;
+  brandSlug: string;
+  goal: string;
+  outputPresetKey: string;
+  outputLabel: string;
+  outputType: string;
+  outputConfig: OutputPresetPayload;
+  campaignId: string | null;
+  campaignName: string | null;
+  platform: string | null;
+  contentId: string | null;
+  contentTitle: string | null;
+  sections: string[];
+  defaultCtas: string[];
+  recommendedJobType: AgentJobTypeValue;
+  postCount: number | null;
+  videoScriptCount: number | null;
+  includeCaptions: boolean | null;
+  includeImagePrompts: boolean | null;
+  includeCtas: boolean | null;
 };
 
 export type BuiltAgentPrompt = {
   title: string;
   prompt: string;
-  payload: {
-    agentType: AgentTypeValue;
-    brandSlug: string;
-    goal: string;
-    outputType: string;
-    campaignId: string | null;
-    campaignName: string | null;
-    platform: string | null;
-    contentId: string | null;
-    contentTitle: string | null;
-    sections: string[];
-    recommendedJobType: AgentJobTypeValue;
-  };
+  payload: BuiltAgentPromptPayload;
   recommendedJobType: AgentJobTypeValue;
 };
 
@@ -113,8 +137,12 @@ export type AgentPromptJobPayload = {
   agentType: AgentTypeValue;
   promptTitle: string;
   prompt: string;
+  businessSlug: string;
+  businessLabel: string;
   brandSlug: string;
   goal: string;
+  outputPresetKey: string;
+  outputLabel: string;
   outputType: string;
   recommendedJobType: AgentJobTypeValue;
   campaignId: string | null;
@@ -124,4 +152,9 @@ export type AgentPromptJobPayload = {
   platform: string | null;
   createdById: string;
   supabaseUserId: string;
+  postCount: number | null;
+  videoScriptCount: number | null;
+  includeCaptions: boolean | null;
+  includeImagePrompts: boolean | null;
+  includeCtas: boolean | null;
 };

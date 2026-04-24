@@ -44,6 +44,14 @@ function getStringValue(value: Prisma.JsonValue | undefined) {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function getNumberValue(value: Prisma.JsonValue | undefined) {
+  return typeof value === "number" ? value : null;
+}
+
+function getBooleanValue(value: Prisma.JsonValue | undefined) {
+  return typeof value === "boolean" ? value : null;
+}
+
 export function getContentPublishJobPayload(payload: Prisma.JsonValue | null) {
   if (!isJsonObject(payload)) {
     return null;
@@ -99,8 +107,12 @@ export function getAgentPromptJobPayload(payload: Prisma.JsonValue | null): Agen
     agentType,
     promptTitle: getStringValue(payload.promptTitle) ?? "",
     prompt: getStringValue(payload.prompt) ?? "",
-    brandSlug: getStringValue(payload.brandSlug) ?? "",
+    businessSlug: getStringValue(payload.businessSlug) ?? getStringValue(payload.brandSlug) ?? "",
+    businessLabel: getStringValue(payload.businessLabel) ?? "",
+    brandSlug: getStringValue(payload.brandSlug) ?? getStringValue(payload.businessSlug) ?? "",
     goal: getStringValue(payload.goal) ?? "",
+    outputPresetKey: getStringValue(payload.outputPresetKey) ?? getStringValue(payload.outputType) ?? "",
+    outputLabel: getStringValue(payload.outputLabel) ?? "",
     outputType: getStringValue(payload.outputType) ?? "",
     recommendedJobType,
     campaignId: getStringValue(payload.campaignId) ?? null,
@@ -109,6 +121,11 @@ export function getAgentPromptJobPayload(payload: Prisma.JsonValue | null): Agen
     contentTitle: getStringValue(payload.contentTitle) ?? null,
     platform: getStringValue(payload.platform) ?? null,
     createdById: getStringValue(payload.createdById) ?? "",
-    supabaseUserId: getStringValue(payload.supabaseUserId) ?? ""
+    supabaseUserId: getStringValue(payload.supabaseUserId) ?? "",
+    postCount: getNumberValue(payload.postCount),
+    videoScriptCount: getNumberValue(payload.videoScriptCount),
+    includeCaptions: getBooleanValue(payload.includeCaptions),
+    includeImagePrompts: getBooleanValue(payload.includeImagePrompts),
+    includeCtas: getBooleanValue(payload.includeCtas)
   };
 }
