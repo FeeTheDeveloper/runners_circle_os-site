@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
+import type { AgentPromptJobPayload } from "@/lib/agents/types";
+
 export type ContentPublishJobPayload = {
   createdById: string;
   supabaseUserId: string;
@@ -23,6 +25,14 @@ export type CreatorGenerationJobPayload = {
   campaignId: string | null;
   campaignName: string | null;
 };
+
+const validAgentTypes = ["campaign_builder", "content_creator", "video_prompt", "automation_builder"] as const;
+const validAgentJobTypes = [
+  "generate_campaign_plan",
+  "generate_content_pack",
+  "generate_video_prompt",
+  "generate_automation_prompt"
+] as const;
 
 type JsonObject = Record<string, Prisma.JsonValue>;
 
@@ -67,5 +77,38 @@ export function getCreatorGenerationJobPayload(payload: Prisma.JsonValue | null)
     format: getStringValue(payload.format) ?? null,
     campaignId: getStringValue(payload.campaignId) ?? null,
     campaignName: getStringValue(payload.campaignName) ?? null
+  };
+}
+
+export function getAgentPromptJobPayload(payload: Prisma.JsonValue | null): AgentPromptJobPayload | null {
+  if (!isJsonObject(payload)) {
+    return null;
+  }
+
+  const agentTypeValue = getStringValue(payload.agentType);
+  const recommendedJobTypeValue = getStringValue(payload.recommendedJobType);
+  const agentType = validAgentTypes.find((value) => value === agentTypeValue);
+  const recommendedJobType = validAgentJobTypes.find((value) => value === recommendedJobTypeValue);
+
+  if (!agentType || !recommendedJobType) {
+    return null;
+  }
+
+  return {
+    agentPromptId: getStringValue(payload.agentPromptId) ?? "",
+    agentType,
+    promptTitle: getStringValue(payload.promptTitle) ?? "",
+    prompt: getStringValue(payload.prompt) ?? "",
+    brandSlug: getStringValue(payload.brandSlug) ?? "",
+    goal: getStringValue(payload.goal) ?? "",
+    outputType: getStringValue(payload.outputType) ?? "",
+    recommendedJobType,
+    campaignId: getStringValue(payload.campaignId) ?? null,
+    campaignName: getStringValue(payload.campaignName) ?? null,
+    contentId: getStringValue(payload.contentId) ?? null,
+    contentTitle: getStringValue(payload.contentTitle) ?? null,
+    platform: getStringValue(payload.platform) ?? null,
+    createdById: getStringValue(payload.createdById) ?? "",
+    supabaseUserId: getStringValue(payload.supabaseUserId) ?? ""
   };
 }

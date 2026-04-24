@@ -11,6 +11,7 @@ const navigation: Array<{ href: Route; label: string; detail: string }> = [
   { href: "/dashboard", label: "Dashboard", detail: "Overview" },
   { href: "/campaigns", label: "Campaigns", detail: "Planning" },
   { href: "/content", label: "Content", detail: "Publishing" },
+  { href: "/agents", label: "Agents", detail: "Command Center" },
   { href: "/creator", label: "Creator", detail: "Generation" },
   { href: "/audiences", label: "Audiences", detail: "Segmentation" },
   { href: "/leads", label: "Leads", detail: "Pipeline" },

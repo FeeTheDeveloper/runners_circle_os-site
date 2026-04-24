@@ -68,7 +68,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
               <div>
                 <CardTitle>Execution ledger</CardTitle>
                 <CardDescription>
-                  Internal execution tracking for publishing and creator-generation jobs with safe lifecycle controls and retry support.
+                  Internal execution tracking for publishing, creator-generation, and agent-command jobs with safe lifecycle controls and retry support.
                 </CardDescription>
               </div>
               <DataSourceBadge source={source} />
@@ -109,7 +109,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Updated</TableHead>
-                      <TableHead>Content</TableHead>
+                      <TableHead>Content / Prompt</TableHead>
                       <TableHead>Campaign</TableHead>
                       <TableHead>Scheduled</TableHead>
                       <TableHead>Action</TableHead>
@@ -194,8 +194,9 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
             <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-4">
               <p className="text-sm font-semibold text-white">Current execution scope</p>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Content publish plus creator image and video jobs can now move from queued to processing to completed
-                or failed entirely inside the app, without touching third-party publishing or generation providers.
+                Content publish, creator generation, and agent-command jobs can now move from queued to processing to
+                completed or failed entirely inside the app, without touching third-party publishing or generation
+                providers.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4">
@@ -203,6 +204,7 @@ export function JobsView({ filters, items, source, summary }: JobsViewProps) {
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-400">
                 <li>Queued content publish jobs can be run manually from the App Router jobs surface.</li>
                 <li>Creator generation jobs share the same queue, retry, and worker execution pipeline.</li>
+                <li>Agent command jobs package structured prompts and move through the same completion and webhook flow.</li>
                 <li>Failed jobs retain error details on the record and can be retried from the same table.</li>
                 <li>Job completion stores a structured internal result without publishing to third-party channels.</li>
               </ul>

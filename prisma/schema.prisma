@@ -70,6 +70,10 @@ enum JobType {
   AUDIENCE_REFRESH
   GENERATE_IMAGE
   GENERATE_VIDEO
+  GENERATE_CAMPAIGN_PLAN
+  GENERATE_CONTENT_PACK
+  GENERATE_VIDEO_PROMPT
+  GENERATE_AUTOMATION_PROMPT
 }
 
 enum JobStatus {
@@ -120,6 +124,20 @@ enum GeneratedAssetStatus {
   FAILED
 }
 
+enum AgentType {
+  CAMPAIGN_BUILDER
+  CONTENT_CREATOR
+  VIDEO_PROMPT
+  AUTOMATION_BUILDER
+}
+
+enum AgentPromptStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -137,6 +155,7 @@ model User {
   leadsCreated            Lead[]
   creatorRequestsCreated  CreatorRequest[]
   generatedAssetsCreated  GeneratedAsset[]
+  agentPromptsCreated     AgentPrompt[]
 
   @@index([role, status])
 }
@@ -157,6 +176,7 @@ model Campaign {
   contentItems    ContentItem[]
   creatorRequests CreatorRequest[]
   generatedAssets GeneratedAsset[]
+  agentPrompts    AgentPrompt[]
 
   @@index([status])
   @@index([startDate, endDate])
@@ -180,6 +200,7 @@ model ContentItem {
   campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   createdBy       User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
   generatedAssets GeneratedAsset[]
+  agentPrompts    AgentPrompt[]
 
   @@index([platform, status])
   @@index([campaignId])
@@ -319,6 +340,29 @@ model GeneratedAsset {
   @@index([campaignId])
   @@index([contentId])
   @@index([createdById])
+}
+
+model AgentPrompt {
+  id          String            @id @default(cuid())
+  agentType   AgentType
+  title       String
+  prompt      String
+  payload     Json
+  status      AgentPromptStatus @default(QUEUED)
+  createdById String
+  campaignId  String?
+  contentId   String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  createdBy User        @relation(fields: [createdById], references: [id])
+  campaign  Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  content   ContentItem? @relation(fields: [contentId], references: [id], onDelete: SetNull)
+
+  @@index([agentType, status])
+  @@index([createdById])
+  @@index([campaignId])
+  @@index([contentId])
 }
 
 model ChannelAccount {

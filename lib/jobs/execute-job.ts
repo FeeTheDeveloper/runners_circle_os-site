@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AutomationJob, Prisma } from "@prisma/client";
 
+import { agentJobTypeFromDb } from "@/lib/agents/types";
 import { generateImageAsset } from "@/lib/creator/generate-image";
 import { generateVideoAsset } from "@/lib/creator/generate-video";
 import type { CreatorTemplateKey } from "@/lib/creator/types";
@@ -9,7 +10,7 @@ import { getAutomationJobById, markJobComplete, markJobFailed, markJobProcessing
 import { prisma } from "@/lib/db/prisma";
 import { notifyN8nJobComplete } from "@/lib/integrations/n8n";
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
-import { getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
+import { getAgentPromptJobPayload, getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
 import { getJobResultDetails } from "@/lib/jobs/result";
 
 const PROCESSING_LOCK_WINDOW_MS = 5 * 60 * 1000;
@@ -29,6 +30,7 @@ type ExecuteAutomationJobOptions = {
 
 type JobFailureContext = {
   action: string;
+  agentPromptId: string | null;
   requestId: string | null;
   contentId: string | null;
   contentTitle: string | null;
@@ -73,6 +75,7 @@ function getContentJobContext(job: AutomationJob): JobFailureContext {
 
   return {
     action: "content_publish",
+    agentPromptId: null,
     requestId: null,
     contentId: payload?.contentItemId ?? null,
     contentTitle: payload?.contentTitle ?? null,
@@ -86,6 +89,7 @@ function getCreatorJobContext(job: AutomationJob): JobFailureContext {
 
   return {
     action: job.type === "GENERATE_VIDEO" ? "generate_video" : "generate_image",
+    agentPromptId: null,
     requestId: payload?.requestId ?? null,
     contentId: null,
     contentTitle: payload?.requestHeadline ?? null,
@@ -94,7 +98,33 @@ function getCreatorJobContext(job: AutomationJob): JobFailureContext {
   };
 }
 
+function getAgentPromptJobContext(job: AutomationJob): JobFailureContext {
+  const payload = getAgentPromptJobPayload(job.payload);
+
+  return {
+    action:
+      job.type in agentJobTypeFromDb
+        ? agentJobTypeFromDb[job.type as keyof typeof agentJobTypeFromDb]
+        : "generate_campaign_plan",
+    agentPromptId: payload?.agentPromptId ?? null,
+    requestId: null,
+    contentId: payload?.contentId ?? null,
+    contentTitle: payload?.promptTitle ?? payload?.contentTitle ?? null,
+    campaignId: payload?.campaignId ?? null,
+    campaignName: payload?.campaignName ?? null
+  };
+}
+
 function getJobFailureContext(job: AutomationJob): JobFailureContext {
+  if (
+    job.type === "GENERATE_CAMPAIGN_PLAN" ||
+    job.type === "GENERATE_CONTENT_PACK" ||
+    job.type === "GENERATE_VIDEO_PROMPT" ||
+    job.type === "GENERATE_AUTOMATION_PROMPT"
+  ) {
+    return getAgentPromptJobContext(job);
+  }
+
   if (job.type === "GENERATE_IMAGE" || job.type === "GENERATE_VIDEO") {
     return getCreatorJobContext(job);
   }
@@ -111,13 +141,25 @@ function getJobCreatedById(job: AutomationJob) {
 
   const creatorPayload = getCreatorGenerationJobPayload(job.payload);
 
-  return creatorPayload?.createdById ?? null;
+  if (creatorPayload?.createdById) {
+    return creatorPayload.createdById;
+  }
+
+  const agentPayload = getAgentPromptJobPayload(job.payload);
+
+  return agentPayload?.createdById ?? null;
 }
 
 function getJobBrandSlug(job: AutomationJob) {
   const creatorPayload = getCreatorGenerationJobPayload(job.payload);
 
-  return creatorPayload?.brandSlug ?? getJsonString(job.payload, "brandSlug");
+  if (creatorPayload?.brandSlug) {
+    return creatorPayload.brandSlug;
+  }
+
+  const agentPayload = getAgentPromptJobPayload(job.payload);
+
+  return agentPayload?.brandSlug ?? getJsonString(job.payload, "brandSlug");
 }
 
 function getJobAssetUrl(job: AutomationJob) {
@@ -127,14 +169,16 @@ function getJobAssetUrl(job: AutomationJob) {
 async function sendJobCompletionWebhook(job: AutomationJob, status: JobWebhookStatus, message: string) {
   const contentPayload = getContentPublishJobPayload(job.payload);
   const creatorPayload = getCreatorGenerationJobPayload(job.payload);
+  const agentPayload = getAgentPromptJobPayload(job.payload);
   const resultDetails = getJobResultDetails(job.result);
 
   await notifyN8nJobComplete({
     jobId: job.id,
     jobType: job.type,
     status,
-    campaignId: resultDetails.campaignId ?? contentPayload?.campaignId ?? creatorPayload?.campaignId ?? null,
-    contentId: resultDetails.contentId ?? contentPayload?.contentItemId ?? null,
+    campaignId:
+      resultDetails.campaignId ?? contentPayload?.campaignId ?? creatorPayload?.campaignId ?? agentPayload?.campaignId ?? null,
+    contentId: resultDetails.contentId ?? contentPayload?.contentItemId ?? agentPayload?.contentId ?? null,
     brandSlug: getJobBrandSlug(job),
     assetUrl: getJobAssetUrl(job),
     message,
@@ -184,6 +228,35 @@ async function processContentPublishJob(job: AutomationJob) {
     processedAt: new Date().toISOString(),
     summary: "Content publish job processed successfully"
   } satisfies Prisma.InputJsonValue;
+}
+
+async function markAgentPromptStatus(
+  agentPromptId: string,
+  status: "PROCESSING" | "COMPLETED" | "FAILED",
+  patch: Record<string, Prisma.InputJsonValue | null>
+) {
+  const agentPrompt = await prisma.agentPrompt.findUnique({
+    where: {
+      id: agentPromptId
+    },
+    select: {
+      payload: true
+    }
+  });
+
+  if (!agentPrompt) {
+    return;
+  }
+
+  await prisma.agentPrompt.update({
+    where: {
+      id: agentPromptId
+    },
+    data: {
+      status,
+      payload: mergeJsonPayload(agentPrompt.payload, patch)
+    }
+  });
 }
 
 async function markCreatorRequestStatus(
@@ -426,6 +499,75 @@ async function processCreatorGenerationJob(job: AutomationJob, mode: "IMAGE" | "
   } satisfies Prisma.InputJsonValue;
 }
 
+async function processAgentPromptJob(job: AutomationJob) {
+  const payload = getAgentPromptJobPayload(job.payload);
+  const agentPromptId = payload?.agentPromptId;
+
+  if (!agentPromptId) {
+    throw new Error(`Automation job ${job.id} is missing the related agent prompt id.`);
+  }
+
+  const agentPrompt = await prisma.agentPrompt.findUnique({
+    where: {
+      id: agentPromptId
+    },
+    select: {
+      id: true,
+      agentType: true,
+      title: true,
+      prompt: true,
+      payload: true,
+      campaignId: true,
+      contentId: true,
+      campaign: {
+        select: {
+          name: true
+        }
+      },
+      content: {
+        select: {
+          title: true
+        }
+      }
+    }
+  });
+
+  if (!agentPrompt) {
+    throw new Error(`Agent prompt ${agentPromptId} could not be found for automation job ${job.id}.`);
+  }
+
+  const action = agentJobTypeFromDb[job.type as keyof typeof agentJobTypeFromDb];
+  const processedAt = new Date().toISOString();
+  const summary = `${payload?.promptTitle ?? agentPrompt.title} packaged successfully for downstream execution.`;
+
+  await markAgentPromptStatus(agentPrompt.id, "PROCESSING", {
+    lastJobId: job.id,
+    startedAt: processedAt
+  });
+
+  await markAgentPromptStatus(agentPrompt.id, "COMPLETED", {
+    lastJobId: job.id,
+    processedAt,
+    summary,
+    lastExecutionAction: action
+  });
+
+  return {
+    success: true,
+    action,
+    agentPromptId: agentPrompt.id,
+    promptTitle: agentPrompt.title,
+    prompt: agentPrompt.prompt,
+    brandSlug: getJsonString(agentPrompt.payload, "brandSlug"),
+    campaignId: agentPrompt.campaignId ?? payload?.campaignId ?? null,
+    campaignName: agentPrompt.campaign?.name ?? payload?.campaignName ?? null,
+    contentId: agentPrompt.contentId ?? payload?.contentId ?? null,
+    contentTitle: agentPrompt.content?.title ?? payload?.contentTitle ?? null,
+    processedAt,
+    summary
+  } satisfies Prisma.InputJsonValue;
+}
+
 async function executeLoadedJob(job: AutomationJob) {
   switch (job.type) {
     case "CONTENT_PUBLISH":
@@ -434,9 +576,14 @@ async function executeLoadedJob(job: AutomationJob) {
       return processCreatorGenerationJob(job, "IMAGE");
     case "GENERATE_VIDEO":
       return processCreatorGenerationJob(job, "VIDEO");
+    case "GENERATE_CAMPAIGN_PLAN":
+    case "GENERATE_CONTENT_PACK":
+    case "GENERATE_VIDEO_PROMPT":
+    case "GENERATE_AUTOMATION_PROMPT":
+      return processAgentPromptJob(job);
     default:
       throw new Error(
-        `Automation job ${job.id} has unsupported type ${job.type}. Supported types are CONTENT_PUBLISH, GENERATE_IMAGE, and GENERATE_VIDEO.`
+        `Automation job ${job.id} has unsupported type ${job.type}.`
       );
   }
 }
@@ -523,9 +670,18 @@ async function runAutomationJob(
       });
     }
 
+    if (context.agentPromptId) {
+      await markAgentPromptStatus(context.agentPromptId, "FAILED", {
+        lastJobId: job.id,
+        failedAt: new Date().toISOString(),
+        lastError: message
+      });
+    }
+
     const failedJob = await markJobFailed(job.id, {
       success: false,
       action: context.action,
+      agentPromptId: context.agentPromptId,
       requestId: context.requestId,
       contentId: context.contentId,
       contentTitle: context.contentTitle,

@@ -1,7 +1,7 @@
 import { Prisma, type AutomationJob, type JobStatus, type JobType } from "@prisma/client";
 
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
-import { getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
+import { getAgentPromptJobPayload, getContentPublishJobPayload, getCreatorGenerationJobPayload } from "@/lib/jobs/payload";
 import { getJobResultDetails } from "@/lib/jobs/result";
 import { prisma } from "@/lib/db/prisma";
 import { runReadQuery } from "@/lib/db/runtime";
@@ -62,6 +62,7 @@ export async function listAutomationJobs(filters: JobFilters) {
           jobs.map((job) => {
             const contentPublishPayload = getContentPublishJobPayload(job.payload);
             const creatorPayload = getCreatorGenerationJobPayload(job.payload);
+            const agentPayload = getAgentPromptJobPayload(job.payload);
             const resultDetails = getJobResultDetails(job.result);
 
             return {
@@ -76,15 +77,22 @@ export async function listAutomationJobs(filters: JobFilters) {
               contentItemId: resultDetails.contentId ?? contentPublishPayload?.contentItemId ?? null,
               contentTitle:
                 resultDetails.contentTitle ??
+                resultDetails.promptTitle ??
                 contentPublishPayload?.contentTitle ??
                 creatorPayload?.requestHeadline ??
+                agentPayload?.promptTitle ??
                 null,
               campaignId:
-                resultDetails.campaignId ?? contentPublishPayload?.campaignId ?? creatorPayload?.campaignId ?? null,
+                resultDetails.campaignId ??
+                contentPublishPayload?.campaignId ??
+                creatorPayload?.campaignId ??
+                agentPayload?.campaignId ??
+                null,
               campaignName:
                 resultDetails.campaignName ??
                 contentPublishPayload?.campaignName ??
                 creatorPayload?.campaignName ??
+                agentPayload?.campaignName ??
                 null,
               resultSummary: resultDetails.summary,
               errorMessage: resultDetails.error

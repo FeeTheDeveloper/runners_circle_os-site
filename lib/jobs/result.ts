@@ -20,7 +20,9 @@ export function getJobResultDetails(result: Prisma.JsonValue | null) {
       campaignId: null,
       campaignName: null,
       requestId: null,
-      generatedAssetId: null
+      generatedAssetId: null,
+      agentPromptId: null,
+      promptTitle: null
     };
   }
 
@@ -32,6 +34,8 @@ export function getJobResultDetails(result: Prisma.JsonValue | null) {
     campaignId: getStringValue(result.campaignId),
     campaignName: getStringValue(result.campaignName),
     requestId: getStringValue(result.requestId),
-    generatedAssetId: getStringValue(result.generatedAssetId)
+    generatedAssetId: getStringValue(result.generatedAssetId),
+    agentPromptId: getStringValue(result.agentPromptId),
+    promptTitle: getStringValue(result.promptTitle)
   };
 }

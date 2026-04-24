@@ -11,6 +11,7 @@ const sectionLabels: Record<string, string> = {
   "/dashboard": "Command center",
   "/campaigns": "Campaign planning",
   "/content": "Publishing queue",
+  "/agents": "Agent command center",
   "/audiences": "Audience intelligence",
   "/leads": "Lead operations",
   "/jobs": "Automation monitor",

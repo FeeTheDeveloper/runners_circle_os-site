@@ -2,11 +2,13 @@ import "server-only";
 
 import type { AutomationJob } from "@prisma/client";
 
+import type { AgentPromptJobPayload } from "@/lib/agents/types";
+import { agentJobTypeToDb } from "@/lib/agents/types";
 import { JOB_STATUS, JOB_STATUS_TO_DB } from "@/lib/jobs/constants";
 import type { ContentPublishJobPayload, CreatorGenerationJobPayload } from "@/lib/jobs/payload";
 import { prisma } from "@/lib/db/prisma";
 
-type JobWriteClient = Pick<typeof prisma, "automationJob" | "contentItem" | "creatorRequest">;
+type JobWriteClient = Pick<typeof prisma, "automationJob" | "contentItem" | "creatorRequest" | "agentPrompt">;
 
 type CreateContentPublishJobInput = {
   contentItemId: string;
@@ -126,6 +128,79 @@ export async function createCreatorGenerationJob(
   return db.automationJob.create({
     data: {
       type: request.type === "IMAGE" ? "GENERATE_IMAGE" : "GENERATE_VIDEO",
+      status: JOB_STATUS_TO_DB[JOB_STATUS.QUEUED],
+      scheduledFor: new Date(),
+      payload
+    }
+  });
+}
+
+type CreateAgentPromptJobInput = {
+  agentPromptId: string;
+  createdById: string;
+  supabaseUserId: string;
+  recommendedJobType: keyof typeof agentJobTypeToDb;
+};
+
+export async function createAgentPromptJob(
+  input: CreateAgentPromptJobInput,
+  db: JobWriteClient = prisma
+): Promise<AutomationJob> {
+  const agentPrompt = await db.agentPrompt.findUnique({
+    where: {
+      id: input.agentPromptId
+    },
+    select: {
+      id: true,
+      title: true,
+      prompt: true,
+      payload: true,
+      campaignId: true,
+      contentId: true,
+      campaign: {
+        select: {
+          name: true
+        }
+      },
+      content: {
+        select: {
+          title: true
+        }
+      }
+    }
+  });
+
+  if (!agentPrompt) {
+    throw new Error("Agent prompt could not be found for automation job creation.");
+  }
+
+  const payloadJson =
+    agentPrompt.payload && typeof agentPrompt.payload === "object" && !Array.isArray(agentPrompt.payload)
+      ? (agentPrompt.payload as Record<string, unknown>)
+      : {};
+
+  const payload: AgentPromptJobPayload = {
+    agentPromptId: agentPrompt.id,
+    agentType:
+      typeof payloadJson.agentType === "string" ? (payloadJson.agentType as AgentPromptJobPayload["agentType"]) : "campaign_builder",
+    promptTitle: agentPrompt.title,
+    prompt: agentPrompt.prompt,
+    brandSlug: typeof payloadJson.brandSlug === "string" ? payloadJson.brandSlug : "",
+    goal: typeof payloadJson.goal === "string" ? payloadJson.goal : "",
+    outputType: typeof payloadJson.outputType === "string" ? payloadJson.outputType : "",
+    recommendedJobType: input.recommendedJobType,
+    campaignId: agentPrompt.campaignId,
+    campaignName: agentPrompt.campaign?.name ?? null,
+    contentId: agentPrompt.contentId,
+    contentTitle: agentPrompt.content?.title ?? null,
+    platform: typeof payloadJson.platform === "string" ? payloadJson.platform : null,
+    createdById: input.createdById,
+    supabaseUserId: input.supabaseUserId
+  };
+
+  return db.automationJob.create({
+    data: {
+      type: agentJobTypeToDb[input.recommendedJobType],
       status: JOB_STATUS_TO_DB[JOB_STATUS.QUEUED],
       scheduledFor: new Date(),
       payload
